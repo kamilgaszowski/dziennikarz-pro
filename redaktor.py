@@ -41,7 +41,7 @@ with st.expander("🔑 Ustawienia API i Modelu", expanded=True):
     with col1:
         api_key = st.text_input("Wklej Google API Key:", type="password")
     with col2:
-    model_name = st.selectbox("Wybierz silnik:", ["gemini-1.5-flash", "gemini-1.5-pro-latest"])
+        model_name = st.selectbox("Wybierz silnik:", ["gemini-1.5-flash", "gemini-1.5-pro-latest"])
 if api_key:
     genai.configure(api_key=api_key)
     
