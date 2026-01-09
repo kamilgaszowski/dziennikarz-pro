@@ -1,94 +1,97 @@
 import streamlit as st
+import io
 
-# --- KONFIGURACJA STRONY ---
-st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️")
+# Jeśli używasz plików docx/pdf, upewnij się, że masz zainstalowane biblioteki:
+# pip install python-docx pypdf2
+try:
+    from docx import Document
+    import PyPDF2
+except ImportError:
+    st.warning("⚠️ Brak bibliotek do czytania DOCX/PDF. Zainstaluj python-docx i pypdf2.")
 
-st.title("🖋️ Dziennikarz Master PRO v10.1")
+st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
+
+st.title("🖋️ Dziennikarz Master PRO v10.2")
+
+# --- FUNKCJE POMOCNICZE DO PLIKÓW ---
+def read_file(uploaded_file):
+    if uploaded_file.name.endswith('.txt'):
+        return uploaded_file.read().decode("utf-8")
+    elif uploaded_file.name.endswith('.docx'):
+        doc = Document(uploaded_file)
+        return "\n".join([para.text for para in doc.paragraphs])
+    elif uploaded_file.name.endswith('.pdf'):
+        pdf_reader = PyPDF2.PdfReader(uploaded_file)
+        return "\n".join([page.extract_text() for page in pdf_reader.pages])
+    return ""
 
 # --- BOCZNY PANEL ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
     
-    # Wybór rodzaju tekstu (Dodano Reportaż)
     typ_tekstu = st.radio(
         "Rodzaj publikacji:",
         ["News (Aktualności)", "Reportaż", "Publicystyka"],
-        index=0
+        index=1 # Domyślnie ustawiony na Reportaż
     )
     
-    # Cel znakowy
-    target_chars = st.slider("Docelowa liczba znaków:", 1000, 5000, value=3500, step=100)
+    # Zwiększony limit do 15k
+    target_chars = st.slider("Docelowa liczba znaków:", 500, 15000, value=3500, step=500)
     
     st.markdown("---")
     st.info(f"Wybrany tryb: **{typ_tekstu}**\n\nLimit: **{target_chars}** znaków.")
 
-# --- WEJŚCIE DANYCH ---
-source_material = st.text_area("Wklej materiały źródłowe lub konspekt:", height=300, 
-                               placeholder="Tutaj wklej notatki, wypowiedzi lub surowy tekst...")
+# --- WEJŚCIE DANYCH (PLIKI + TEKST) ---
+col_in1, col_in2 = st.columns(2)
 
-# --- LOGIKA PROMPTU (MANIFEST) ---
-# Tutaj definiujemy, jak AI ma pisać
+with col_in1:
+    uploaded_files = st.file_uploader("Dodaj pliki źródłowe (PDF, DOCX, TXT):", 
+                                     accept_multiple_files=True)
+
+with col_in2:
+    pasted_text = st.text_area("Lub wklej materiały tutaj:", height=150)
+
+# Łączenie źródeł
+all_source_material = pasted_text
+if uploaded_files:
+    for f in uploaded_files:
+        all_source_material += f"\n\n--- Treść z pliku {f.name} ---\n" + read_file(f)
+
+# --- PROMPT (MANIFEST) ---
 instrukcja_stylu = f"""
 Jesteś doświadczonym redaktorem. Napisz tekst w stylu 'Instytutu Gość Media'.
 RODZAJ TEKSTU: {typ_tekstu}
-LIMIT: Maksymalnie {target_chars} znaków ze spacjami. To jest limit NIEPRZEKRACZALNY.
+DOCELOWA DŁUGOŚĆ: ok. {target_chars} znaków ze spacjami.
 
 STRUKTURA OBOWIĄZKOWA:
-1. Nadtytuł (krótki, nad tytułem głównym).
-2. Tytuł (mocny, przyciągający).
-3. Lid (streszczenie, na końcu dodaj: (Instytut Gość Media)).
-4. Sekcja 'Propozycje tytułów' (lista 5 propozycji).
-5. Sekcja 'Propozycje lidów' (lista 3-5 propozycji, każdy zakończony: (Instytut Gość Media)).
-6. Treść główna:
-   - Używaj pauz do cytatów: — Tekst cytatu —
-   - Styl ma być rzeczowy, ale ciepły (blisko ludzi).
-   - Jeśli to News: trzymaj się faktów.
-   - Jeśli to Reportaż: pozwól na więcej opisu i emocji, ale zachowaj strukturę powyżej.
+1. Nadtytuł
+2. Tytuł
+3. Lid (na końcu dodaj: (Instytut Gość Media))
+4. Sekcja 'Propozycje tytułów' (lista 5 sztuk)
+5. Sekcja 'Propozycje lidów' (lista 3-5 sztuk, każdy z (Instytut Gość Media))
+6. Treść główna (Cytaty w formie: — tekst —)
 """
 
 if st.button("🚀 Generuj Materiał"):
-    if source_material:
-        with st.spinner("Przetwarzam materiały i formatuję tekst..."):
-            # MIEJSCE NA TWOJE WYWOŁANIE API (np. OpenAI lub Gemini)
-            # Przykład:
-            # response = client.generate(prompt=instrukcja_stylu + source_material)
-            # wygenerowany_tekst = response.text
-            
-            # SYMULACJA (do testu wyglądu):
-            wygenerowany_tekst = f"Nadtytuł\nPrzykładowy nadtytuł\n\nTytuł\n{typ_tekstu}: Nowe wydarzenie\n\nLid\nTo jest wygenerowany lid zgodnie z Twoim wzorem. (Instytut Gość Media)\n\n..."
-            
-            st.session_state.artykul = wygenerowany_tekst
+    if all_source_material.strip():
+        with st.spinner("Przetwarzam materiały..."):
+            # Tutaj Twoja logika API (np. Gemini/GPT)
+            # Na potrzeby testu:
+            st.session_state.artykul = f"WYNIK DLA: {typ_tekstu}\n\n[Tu pojawi się wygenerowany artykuł na ok. {target_chars} znaków...]"
     else:
-        st.error("Wklej najpierw materiały źródłowe!")
+        st.error("Proszę dodać plik lub wkleić tekst źródłowy!")
 
-# --- WYŚWIETLANIE WYNIKÓW ---
+# --- WYNIKI I LICZNIK ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     dlugosc = len(tekst)
     
     st.divider()
     
-    # Licznik i statystyki
-    col1, col2 = st.columns(2)
-    with col1:
-        # Zmienia kolor w zależności od limitu
-        if dlugosc > target_chars:
-            st.metric("Liczba znaków", f"{dlugosc}", delta=f"{dlugosc - target_chars} za dużo", delta_color="inverse")
-        else:
-            st.metric("Liczba znaków", f"{dlugosc}", delta=f"{target_chars - dlugosc} zapasu")
-
-    with col2:
-        st.write("") # Odstęp
-        if dlugosc > target_chars:
-            st.warning("⚠️ Tekst przekracza założony limit znaków!")
-
-    # Sekcja kopiowania
-    st.subheader("Finalny tekst (gotowy do skopiowania):")
-    st.code(tekst, language="text", wrap_lines=True)
+    col_stat1, col_stat2 = st.columns([1, 2])
+    with col_stat1:
+        st.metric("Liczba znaków", f"{dlugosc}", delta=f"{dlugosc - target_chars} różnicy")
     
-    st.caption("💡 Kliknij przycisk 'Copy' w prawym górnym rogu ramki powyżej.")
-
-    # Opcja "Tnij tekst" - jeśli wyjdzie za długi
-    if dlugosc > target_chars + 200:
-        if st.button("✂️ Skróć tekst o 20% (zachowaj styl)"):
-            st.info("Tutaj można dodać funkcję 'Refine', która wyśle tekst z powrotem do AI z prośbą o skróty.")
+    st.subheader("Finalny tekst:")
+    st.code(tekst, language="text", wrap_lines=True)
+    st.caption("💡 Użyj przycisku 'Copy' w rogu ramki.")
