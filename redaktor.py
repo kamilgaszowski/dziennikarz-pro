@@ -10,7 +10,7 @@ st.markdown("""
     .main { background-color: #f5f7f9; }
     .stButton>button { width: 100%; background-color: #007bff; color: white; }
     </style>
-    """, unsafe_allow_index=True)
+ """, unsafe_allow_html=True)
 
 # --- MANIFESTY (Ostateczne wersje) ---
 MANIFEST_NEWS = """
