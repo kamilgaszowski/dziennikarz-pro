@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (MINIMALIST FLOW) ---
+# --- CSS (FLEXBOX REORDERING) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,34 +62,64 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER - SLIM STRIP STYLE */
+    /* 2. UPLOADER - ZMIANA KOLEJNOŚCI ELEMENTÓW */
     [data-testid='stFileUploader'] {
         margin-top: 0px;
         margin-bottom: 15px;
     }
-    /* Ukrywamy standardowe teksty */
-    [data-testid='stFileUploader'] section > div:first-child span, 
-    [data-testid='stFileUploader'] section > div:first-child small { display: none; }
     
-    /* Własny, minimalistyczny tekst w jednej linii */
-    [data-testid='stFileUploader'] section > div:first-child::before {
-        content: "📥 Importuj materiały (Audio, Dokumenty)";
-        display: block; text-align: center; font-weight: 500; font-size: 14px; color: #bbb;
-    }
-    
-    /* Stylizacja paska */
+    /* Główny kontener jako Flex Column */
     [data-testid='stFileUploader'] section {
-        padding: 15px !important; /* Niski padding */
-        min-height: 0px !important;
+        display: flex;
+        flex-direction: column; /* Układ pionowy */
+        align-items: center;
+        padding: 15px !important;
         background-color: #16181e; 
         border: 1px dashed #333; 
         border-radius: 4px;
+        min-height: 0px !important;
     }
-    [data-testid='stFileUploader'] section:hover { border-color: #666; background-color: #1c1f26; }
+    [data-testid='stFileUploader'] section:hover {
+        border-color: #666;
+        background-color: #1c1f26;
+    }
+
+    /* ELEMENT 1: Tytuł (poprzez ::before) */
+    [data-testid='stFileUploader'] section::before {
+        content: "📥 Importuj materiały";
+        order: 1; /* Pierwsze miejsce */
+        display: block; 
+        text-align: center; 
+        font-weight: 500; 
+        font-size: 14px; 
+        color: #bbb;
+        margin-bottom: 2px;
+    }
+    
+    /* ELEMENT 2: Opis techniczny (poprzez ::after) */
+    [data-testid='stFileUploader'] section::after {
+        content: "Limit 200MB • TXT, PDF, DOCX, MP3, WAV, M4A";
+        order: 2; /* Drugie miejsce */
+        display: block; 
+        text-align: center; 
+        font-size: 11px; 
+        color: #555;
+        margin-bottom: 10px; /* Odstęp od przycisku */
+    }
+
+    /* ELEMENT 3: Przycisk 'Browse files' (Zawartość wewnętrzna) */
+    [data-testid='stFileUploader'] section > * {
+        order: 3; /* Trzecie miejsce (na samym dole) */
+    }
+
+    /* Ukrycie oryginalnych tekstów Streamlita, zostawiamy tylko przycisk */
+    [data-testid='stFileUploader'] section span { display: none; }
+    [data-testid='stFileUploader'] section small { display: none; }
     [data-testid='stFileUploader'] svg { display: none; }
     
     /* Zmniejszenie odstępu po wgraniu pliku */
     .st-emotion-cache-1ae8axi { margin-bottom: 0px !important; }
+
 
     /* 3. BUTTONY GŁÓWNE */
     div.stButton > button {
@@ -103,9 +133,7 @@ st.markdown("""
     [data-testid="stTextArea"] textarea {
         background-color: #16181e; border: 1px solid #333;
     }
-    [data-testid="stTextArea"] label {
-        display: none; /* Ukrywamy label "Notatki", bo kontekst jest oczywisty */
-    }
+    [data-testid="stTextArea"] label { display: none; }
 
     /* 5. HISTORIA SIDEBAR */
     [data-testid="stSidebar"] div.stButton > button p {
@@ -225,7 +253,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.11</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.12</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -290,7 +318,7 @@ with st.sidebar:
 
 # --- GŁÓWNY INTERFEJS (TOP-DOWN FLOW) ---
 
-# 1. IMPORT (Slim strip pod tytułem)
+# 1. IMPORT (Reordered via Flexbox)
 uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
 
 audio_to_proc = None
@@ -299,10 +327,9 @@ if uploaded:
     for f in uploaded:
         if f.name.endswith(('.mp3','.wav','.m4a')): audio_to_proc = f
         else: docs_to_proc.append(f)
-    # Wyświetlamy subtelne info o plikach pod uploaderem
     info = []
     if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
-    if docs_to_proc: info.append(f"Dokumenty: {len(docs_to_proc)}")
+    if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
     if info: st.caption(" • ".join(info))
 
 # 2. NOTATKA (Full width)
