@@ -63,7 +63,6 @@ def fetch_url_content(url):
     except: return ""
 
 def count_body_chars_only(text):
-    """Liczy znaki netto pod separatorem."""
     if not text: return 0
     clean_text = text.replace("\r", "")
     separators = ["### ARTYKUŁ", "### WYWIAD", "### TREŚĆ"]
@@ -120,11 +119,16 @@ def add_to_history(text, type_label):
     st.session_state.history.insert(0, entry)
     save_history_to_disk(st.session_state.history)
 
-def delete_from_history(index):
-    """Usuwa jeden element z historii i zapisuje plik."""
+# --- KLUCZOWA POPRAWKA: CALLBACK DO USUWANIA ---
+def delete_history_item(index):
+    """Funkcja wywoływana PRZED odświeżeniem strony"""
     if 0 <= index < len(st.session_state.history):
         st.session_state.history.pop(index)
         save_history_to_disk(st.session_state.history)
+
+def clear_all_history():
+    st.session_state.history = []
+    save_history_to_disk([])
 
 # --- CSS ---
 st.markdown("""
@@ -141,14 +145,13 @@ st.markdown("""
     div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb { background-color: #262730; border-radius: 10px; border: 2px solid #0e1117; }
     .stDeployButton {display:none;}
     
-    /* Wyrównanie przycisków w historii */
     div[data-testid="stSidebar"] button {
         text-align: left;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v15.3")
+st.title("🖋️ Dziennikarz Master PRO v15.4")
 
 if not HAS_WEB_LIBS:
     st.warning("⚠️ Brak bibliotek requests/bs4. Linki nie będą działać.")
@@ -196,39 +199,34 @@ with st.sidebar:
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
             st.rerun()
 
-    # --- HISTORIA (NOWY UKŁAD Z USUWANIEM) ---
+    # --- HISTORIA (NAPRAWIONE USUWANIE - CALLBACK) ---
     st.divider()
     st.subheader("🗄️ Historia")
+    
     if len(st.session_state.history) > 0:
-        # Iterujemy przez historię
         for i, item in enumerate(st.session_state.history):
-            # Tworzymy dwie kolumny: szeroką dla tytułu (Wczytaj) i wąską dla iksu (Usuń)
-            col_load, col_del = st.columns([5, 1])
+            # Używamy proporcji [4, 1] dla lepszego wyglądu
+            col_load, col_del = st.columns([4, 1])
             
-            # Kolumna 1: Tytuł (jako przycisk wczytania)
             with col_load:
                 title_label = item.get('title', 'Bez tytułu')
+                # Unikalny klucz dla przycisku wczytania
                 if st.button(title_label, key=f"load_{i}_{item['time']}", use_container_width=True):
                     st.session_state.artykul = item['content']
                     st.rerun()
             
-            # Kolumna 2: Usuwanie
             with col_del:
-                if st.button("❌", key=f"del_{i}_{item['time']}", help="Usuń ten wpis"):
-                    delete_from_history(i)
-                    st.rerun()
+                # KLUCZOWA ZMIANA: używamy on_click zamiast logiki wewnątrz if
+                st.button("❌", key=f"del_{i}_{item['time']}", on_click=delete_history_item, args=(i,))
             
-            # Informacje pod przyciskiem (nieklikalne)
+            # Informacje pod przyciskiem
             chars_display = item.get('chars', 0)
             st.caption(f"{item['type']} | {item['time']} | {chars_display} zn.")
-            
-            # Separator wizualny
             st.markdown("<hr style='margin: 5px 0; opacity: 0.3;'>", unsafe_allow_html=True)
 
-        if st.button("🗑️ Usuń WSZYSTKO", type="primary"):
-            st.session_state.history = []
-            save_history_to_disk([])
-            st.rerun()
+        # Przycisk usuwania wszystkiego też na callbacku dla pewności
+        st.button("🗑️ Usuń WSZYSTKO", type="primary", on_click=clear_all_history)
+        
     else:
         st.caption("Pusto.")
 
