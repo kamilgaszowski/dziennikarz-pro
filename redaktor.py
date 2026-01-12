@@ -14,7 +14,7 @@ try:
 except Exception as e:
     st.error(f"Błąd API: {e}")
 
-# 2. BIBLIOTEKI PLIKÓW
+# 2. BIBLIOTEKI
 try:
     from docx import Document
     import PyPDF2
@@ -22,7 +22,6 @@ try:
 except ImportError:
     HAS_LIBS = False
 
-# 3. BIBLIOTEKI WEB (Obsługa błędów, jeśli ich nie ma)
 try:
     import requests
     from bs4 import BeautifulSoup
@@ -34,13 +33,27 @@ st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", lay
 
 # --- FUNKCJE POMOCNICZE ---
 
+def load_manifest_from_file(filename, target_chars):
+    """
+    Wczytuje treść manifestu z pliku txt i podstawia liczbę znaków.
+    """
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                content = f.read()
+                # Bezpieczne podstawienie liczby znaków w miejsce {target_chars}
+                return content.replace("{target_chars}", str(target_chars))
+        except Exception as e:
+            return f"BŁĄD ODCZYTU PLIKU MANIFESTU {filename}: {e}"
+    else:
+        return f"BRAK PLIKU MANIFESTU: {filename}. Wgraj go do folderu aplikacji."
+
 def extract_urls(text):
     url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     return re.findall(url_pattern, text)
 
 def fetch_url_content(url):
-    if not HAS_WEB_LIBS:
-        return ""
+    if not HAS_WEB_LIBS: return ""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
@@ -53,25 +66,11 @@ def fetch_url_content(url):
         return "\n".join(lines)[:8000]
     except: return ""
 
-# NOWA FUNKCJA LICZĄCA ZNAKI (BEZ NAGŁÓWKÓW)
 def count_body_chars_only(text):
-    """
-    Liczy znaki pomijając nagłówki (Nadtytuł, Tytuł, Lid).
-    Zakłada, że pierwsze 3 niepuste linie/bloki to nagłówki.
-    """
     if not text: return 0
-    
-    # Dzielimy na linie i usuwamy puste
     lines = [line.strip() for line in text.split('\n') if line.strip()]
-    
-    # Jeśli tekst jest bardzo krótki (np. błąd generowania), licz wszystko
-    if len(lines) <= 3:
-        return len("".join(lines))
-    
-    # Pomijamy pierwsze 3 elementy (zakładamy: Nadtytuł, Tytuł, Lid)
+    if len(lines) <= 3: return len("".join(lines))
     body_lines = lines[3:] 
-    
-    # Łączymy resztę i liczymy
     return len("".join(body_lines))
 
 # --- HISTORIA ---
@@ -82,8 +81,7 @@ def extract_title_from_text(text):
     for line in lines[:10]:
         if line.lower().startswith("tytuł:") or line.lower().startswith("tytuł"):
             return line.split(":", 1)[-1].strip().replace("*", "")
-    if len(lines) >= 2:
-        return lines[1].replace("#", "").replace("*", "").strip()
+    if len(lines) >= 2: return lines[1].replace("#", "").replace("*", "").strip()
     return "Bez tytułu"
 
 def load_history_from_disk():
@@ -94,6 +92,8 @@ def load_history_from_disk():
                 for item in data:
                     if "title" not in item:
                         item["title"] = extract_title_from_text(item["content"])
+                    if "chars" not in item: # Migracja
+                        item["chars"] = count_body_chars_only(item["content"])
                 return data
         except: return []
     return []
@@ -111,7 +111,7 @@ def add_to_history(text, type_label):
         "time": timestamp,
         "type": type_label,
         "content": text,
-        "chars": count_body_chars_only(text), # Używamy nowego licznika też w historii
+        "chars": count_body_chars_only(text),
         "title": extract_title_from_text(text)
     }
     st.session_state.history.insert(0, entry)
@@ -134,12 +134,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v14.4")
+st.title("🖋️ Dziennikarz Master PRO v15.0")
 
 if not HAS_WEB_LIBS:
-    st.warning("⚠️ Brak bibliotek requests/bs4. Linki nie będą działać (dodaj je do requirements.txt).")
+    st.warning("⚠️ Brak bibliotek requests/bs4. Linki nie będą działać.")
 
-# --- PANEL BOCZNY (ZMIANY UI) ---
+# --- PANEL BOCZNY ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
@@ -147,15 +147,13 @@ with st.sidebar:
     target_words = int(target_chars / 7)
     st.caption(f"AI celuje w ok. {target_words} słów treści właściwej.")
     
-    # --- SEKCJA STATUSU (ZAWSZE WIDOCZNA) ---
+    # --- STATUS I KOREKTA ---
     st.divider()
     st.markdown("### 📊 Status i Korekta")
     
-    # Pobieramy aktualny tekst (jeśli jest)
     current_text = st.session_state.get("artykul", "")
     
     if current_text:
-        # Obliczamy tylko treść (bez nagłówków)
         netto_body = count_body_chars_only(current_text)
         roznica = netto_body - target_chars
         delta_color = "normal" if abs(roznica) < 300 else "inverse"
@@ -164,14 +162,13 @@ with st.sidebar:
         btn_disabled = False
     else:
         st.metric("Treść (bez nagłówków)", value=0, delta="oczekiwanie")
-        btn_disabled = True # Przyciski nieaktywne
+        btn_disabled = True
         
-    # Przyciski (bez ikonek, zawsze widoczne, ale mogą być nieaktywne)
     c1, c2 = st.columns(2)
     
     if c1.button("Skróć", disabled=btn_disabled, use_container_width=True):
         with st.spinner("Skracam..."):
-            prompt_short = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ do ok. {target_chars} znaków. Zachowaj nagłówki bez zmian. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{current_text}"
+            prompt_short = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ do ok. {target_chars} znaków. Zachowaj nagłówki. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{current_text}"
             res = model.generate_content(prompt_short)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Skrót)")
@@ -192,7 +189,6 @@ with st.sidebar:
         for i, item in enumerate(st.session_state.history):
             with st.container():
                 st.markdown(f"**{item.get('title', 'Bez tytułu')}**")
-                # Tutaj też używamy już policzonej wartości chars (body only) jeśli była zapisana nową metodą
                 chars_display = item.get('chars', 0)
                 st.caption(f"{item['type']} | {item['time']} | {chars_display} zn.")
                 if st.button("📂 Wczytaj", key=f"rest_{i}_{item['time']}"):
@@ -228,7 +224,7 @@ with col_b:
 with col_c:
     pasted_text = st.text_area("✍️ Notatki i Linki:", height=100)
 
-# --- PRZETWARZANIE NOTATEK I PLIKÓW ---
+# --- PRZETWARZANIE ---
 context_data = ""
 if pasted_text:
     urls = extract_urls(pasted_text)
@@ -245,122 +241,26 @@ if uploaded_files:
     for f in uploaded_files:
         source_content += f"\n\n--- PLIK: {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY ---
-manifest_wywiad_full = f"""
-JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE WYWIADU.
-PEŁNE WYTYCZNE REDAKCYJNE:
-Wywiad
-1) Tryb i cel
-Redaguję materiał do formy Q/A.
-Robię porządną redakcję językową wypowiedzi rozmówcy.
-Nie dodaję treści. Porządkuję, wygładzam, układam.
-2) Zasada nadrzędna pracy na źródle
-Pracuję wyłącznie na materiale źródłowym podanym przez Ciebie.
-Nie dopisuję faktów, nazwisk, liczb ani kontekstów spoza transkrypcji.
-3) Zakazy stylu w pytaniach i przejściach
-Zakaz metajęzyka i „głosu narratora”. Nie używam sformułowań typu: „w rozmowie”, „w tej rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”, „wróćmy do”, „mówiłaś o…”, jeśli wątek nie padł przed chwilą.
-Pytania mają brzmieć jak bezpośredni zwrot prowadzącego do rozmówcy (2. osoba).
-4) Anty-kompresja (UWAGA: ZALEŻNA OD LIMITU ZNAKÓW - PATRZ PRIORYTET DŁUGOŚCI)
-Nie spłaszczam wypowiedzi do streszczeń.
-Zachowuję sceny, przykłady, dopowiedzenia, mikrokontrpytania.
-Skracam najpierw: oczywiste powtórzenia, „yyy/eee”, dygresje techniczne.
-5) Mniej pytań, większa głębia
-„Mniej pytań” oznacza większe pytania + ewentualnie krótkie mikrokontrpytania.
-Nie tnę odpowiedzi tylko po to, by było krócej.
-6) Spójność pytań
-Nie używam odwołań typu „wspominałaś wcześniej”, jeśli dany wątek nie padł w pytaniu bezpośrednio poprzedzającym.
-Każde pytanie ma być zrozumiałe „tu i teraz”.
-Jeśli przenoszę wątek z innej części rozmowy, formułuję pytanie tak, jakby temat pojawiał się po raz pierwszy.
-7) Język rozmówcy w Q/A
-Wygładzam język mówiony na pisany, zachowując sens i styl mówiącego.
-Usuwam wypełniacze (np. „no”, „jakby”, „w sumie”, „nie?”).
-Usuwam oczywiste powtórzenia i dygresje techniczne.
-Poprawiam składnię, interpunkcję, dzielę na zdania.
-Redukuję nadmiarowe „ja” wszędzie tam, gdzie wystarczy czasownik.
-Nie dopisuję nowych treści i nie zmieniam znaczenia.
-8) Dodatkowa stała preferencja językowa
-Nie używam słowa „kapłan” i jego odmian (używam: ksiądz, duchowny, duszpasterz, proboszcz, wikary).
-9) Zestaw nagłówków na start
-Na początku zawsze daję: nadtytuł, tytuł, lid.
-Automatycznie dodaję też:
-- 5 propozycji tytułów (maks. 3 słowa),
-- 3 propozycje lidów.
-Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).
-Lid i pierwszy akapit nie mogą zaczynać się od daty.
-
-Checklista przed wysyłką wywiadu:
-[ ] Pracuję wyłącznie na materiale źródłowym
-[ ] Forma Q/A
-[ ] Brak metajęzyka
-[ ] Pytania w 2. osobie
-[ ] Anty-kompresja (chyba że limit znaków wymusza cięcia)
-[ ] Redakcja do języka pisanego
-[ ] Brak słowa "kapłan"
-[ ] Sekcja "KOTWICE I PEREŁKI" na końcu
-"""
-
-manifest_news_full = f"""
-JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE ARTYKUŁU / RELACJI.
-PEŁNE WYTYCZNE REDAKCYJNE:
-Artykuł / News
-1) Materiał i fakty
-Pracuję wyłącznie na materiale źródłowym dostarczonym przez Ciebie.
-Jeśli jest załącznik, wszystkie cytaty i fakty biorę tylko z pliku.
-Nie dopisuję faktów, nazwisk, liczb ani kontekstów, których nie ma w materiale.
-2) Zestaw nagłówków na start
-Na początku zawsze daję: nadtytuł, tytuł, lid.
-Automatycznie dodaję też:
-- 5 propozycji tytułów (maks. 3 słowa),
-- 3 propozycje lidów.
-Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).
-Lid i pierwszy akapit nie mogą zaczynać się od daty.
-3) Struktura tekstu głównego
-Tekst ma brzmieć jak relacja prasowa, nie streszczenie.
-Zwykle cel: 6–10 akapitów.
-Jeśli pojawiają się śródtytuły: nie mogą być na początku (najpierw akapit wejściowy), mają mieć raczej metaforyczny charakter.
-4) Styl i zakazy językowe
-Styl reporterski, precyzyjny, bez klisz i „gotowych fraz”.
-Unikam emfazy i zdań pustych treściowo.
-Unikam zdań komentujących cytaty w stylu „te słowa pokazują…”, „w tych zdaniach streszcza się…”.
-Nie używam średników (;).
-Nie używam dwukropków (:).
-W tekście autorskim nie używam myślników (chyba że jako wtrącenie w cytacie).
-5) Cytaty – reguły żelazne
-Cytaty zapisuję bez cudzysłowów.
-Stosuję wyłącznie format z myślnikami/pauzami, np.:
-– To jest treść cytatu. To jest dalsza część. – mówi Jan Kowalski.
-– To jest kolejny cytat. – dodaje.
-6) Redakcja cytatów
-Zasada 4 zdań: Każdy cytat ma mieć minimum cztery zdania, żeby w pełni oddać myśl.
-Zasada kontekstu: Przed każdym cytatem muszą być min. 3 zdania wprowadzające, a po każdym cytacie min. 3 zdania rozwinięcia/komentarza (nie streszczenia!).
-Gęstość: Celuję w jeden solidny blok cytatu na jeden akapit tekstu.
-7) Zakazy językowe cd.
-Nie używam słowa „kapłan” i jego odmian (zastąp: duchowny, ksiądz, duszpasterz).
-
-Checklista przed wysyłką artykułu:
-[ ] Materiał tylko ze źródła
-[ ] Nagłówki + propozycje
-[ ] Styl reporterski
-[ ] Brak średników i dwukropków
-[ ] Cytaty bez cudzysłowów (pauzy)
-[ ] Cytaty min. 4 zdania
-[ ] Kontekst min. 3 zdania
-[ ] Brak słowa "kapłan"
-"""
-
+# --- ŁADOWANIE MANIFESTÓW Z PLIKÓW ---
+# Teraz kod ładuje treść z plików, które wgrałeś obok
 if typ_tekstu == "Wywiad":
-    manifest = manifest_wywiad_full
+    manifest = load_manifest_from_file("manifest_wywiad.txt", target_chars)
 else:
-    manifest = manifest_news_full
+    manifest = load_manifest_from_file("manifest_news.txt", target_chars)
 
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
     content_payload = [manifest]
+    
+    # Dodajemy kontekst (notatki/linki)
     if context_data:
         content_payload.append(f"DODATKOWY KONTEKST (Linki/Notatki):\n{context_data}")
+        
+    # Dodajemy główny materiał (pliki)
     if source_content: 
         content_payload.append(f"GŁÓWNY MATERIAŁ ŹRÓDŁOWY:\n{source_content}")
     
+    # Dodajemy audio
     if uploaded_audio:
         with st.spinner("Przesyłam audio do Gemini 3..."):
             with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
@@ -370,6 +270,7 @@ if st.button("🚀 Generuj Materiał"):
                 audio_file = genai.get_file(audio_file.name)
             content_payload.append(audio_file)
 
+    # Strażnik Długości (Word Proxy)
     length_enforcer = f"""
     *** INSTRUKCJA PRIORYTETOWA (KONTROLA DŁUGOŚCI) ***
     Użytkownik wymaga tekstu o objętości ok. {target_chars} znaków netto (licząc BEZ nagłówków).
@@ -381,7 +282,7 @@ if st.button("🚀 Generuj Materiał"):
     with st.spinner("Generowanie tekstu..."):
         try:
             if not source_content and not uploaded_audio:
-                st.error("Brak materiału źródłowego!")
+                st.error("Brak materiału źródłowego (pliki lub audio).")
             else:
                 response = model.generate_content(content_payload)
                 st.session_state.artykul = response.text
@@ -389,7 +290,7 @@ if st.button("🚀 Generuj Materiał"):
                 st.rerun()
         except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI: GŁÓWNE OKNO ---
+# --- WYNIKI ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     st.subheader("Gotowy Artykuł:")
