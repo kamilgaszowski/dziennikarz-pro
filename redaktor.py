@@ -6,7 +6,7 @@ import io
 try:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     # Zmiana na 'gemini-1.5-flash' dla lepszej stabilności (naprawia błąd 404)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash", "gemini-3-pro-latest')
 except Exception as e:
     st.error(f"Błąd konfiguracji API: {e}")
 
