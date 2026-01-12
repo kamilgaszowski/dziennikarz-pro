@@ -31,17 +31,46 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
+# --- NOWA FUNKCJA LICZĄCA (OD SEPARATORA) ---
+def count_body_chars_only(text):
+    """
+    Liczy znaki TYLKO w treści właściwej, pomijając sekcję propozycji.
+    Szuka separatorów: ### ARTYKUŁ lub ### WYWIAD.
+    """
+    if not text: return 0
+    
+    # Normalizacja (usuwamy znaki końca linii dla łatwiejszego liczenia netto)
+    clean_text = text.replace("\r", "")
+    
+    # Szukamy separatorów
+    separators = ["### ARTYKUŁ", "### WYWIAD", "### TREŚĆ"]
+    
+    start_index = -1
+    
+    for sep in separators:
+        if sep in clean_text:
+            # Znaleziono separator - bierzemy wszystko co jest PO nim
+            parts = clean_text.split(sep, 1)
+            if len(parts) > 1:
+                content_part = parts[1]
+                # Liczymy znaki netto (bez enterów) w tej części
+                return len(content_part.replace("\n", ""))
+            
+    # FALLBACK: Jeśli AI zapomni separatora, próbujemy pominąć pierwsze 15 linii (meta-dane)
+    lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
+    if len(lines) > 10:
+        # Zakładamy, że propozycje zajmują początek, bierzemy ostatnie 80% tekstu
+        return int(len(clean_text.replace("\n", "")) * 0.8)
+        
+    return len(clean_text.replace("\n", ""))
+
 # --- FUNKCJE POMOCNICZE ---
 
 def load_manifest_from_file(filename, target_chars):
-    """
-    Wczytuje treść manifestu z pliku txt i podstawia liczbę znaków.
-    """
     if os.path.exists(filename):
         try:
             with open(filename, "r", encoding="utf-8") as f:
                 content = f.read()
-                # Bezpieczne podstawienie liczby znaków w miejsce {target_chars}
                 return content.replace("{target_chars}", str(target_chars))
         except Exception as e:
             return f"BŁĄD ODCZYTU PLIKU MANIFESTU {filename}: {e}"
@@ -66,19 +95,12 @@ def fetch_url_content(url):
         return "\n".join(lines)[:8000]
     except: return ""
 
-def count_body_chars_only(text):
-    if not text: return 0
-    lines = [line.strip() for line in text.split('\n') if line.strip()]
-    if len(lines) <= 3: return len("".join(lines))
-    body_lines = lines[3:] 
-    return len("".join(body_lines))
-
 # --- HISTORIA ---
 HISTORY_FILE = "historia_redaktora.json"
 
 def extract_title_from_text(text):
     lines = [line.strip() for line in text.split('\n') if line.strip()]
-    for line in lines[:10]:
+    for line in lines[:15]: # Szukamy głębiej
         if line.lower().startswith("tytuł:") or line.lower().startswith("tytuł"):
             return line.split(":", 1)[-1].strip().replace("*", "")
     if len(lines) >= 2: return lines[1].replace("#", "").replace("*", "").strip()
@@ -89,10 +111,9 @@ def load_history_from_disk():
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
+                # Migracja dla nowych liczników
                 for item in data:
-                    if "title" not in item:
-                        item["title"] = extract_title_from_text(item["content"])
-                    if "chars" not in item: # Migracja
+                    if "chars" not in item:
                         item["chars"] = count_body_chars_only(item["content"])
                 return data
         except: return []
@@ -111,7 +132,7 @@ def add_to_history(text, type_label):
         "time": timestamp,
         "type": type_label,
         "content": text,
-        "chars": count_body_chars_only(text),
+        "chars": count_body_chars_only(text), # UŻYWAMY NOWEJ FUNKCJI
         "title": extract_title_from_text(text)
     }
     st.session_state.history.insert(0, entry)
@@ -134,7 +155,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v15.0")
+st.title("🖋️ Dziennikarz Master PRO v15.1")
 
 if not HAS_WEB_LIBS:
     st.warning("⚠️ Brak bibliotek requests/bs4. Linki nie będą działać.")
@@ -143,9 +164,9 @@ if not HAS_WEB_LIBS:
 with st.sidebar:
     st.header("⚙️ Ustawienia")
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
-    target_chars = st.slider("Cel znaków (TREŚĆ):", 500, 15000, value=3500, step=500)
+    target_chars = st.slider("Cel znaków (TREŚĆ WŁAŚCIWA):", 500, 15000, value=3500, step=500)
     target_words = int(target_chars / 7)
-    st.caption(f"AI celuje w ok. {target_words} słów treści właściwej.")
+    st.caption(f"Celujemy w ok. {target_words} słów pod nagłówkiem.")
     
     # --- STATUS I KOREKTA ---
     st.divider()
@@ -158,17 +179,17 @@ with st.sidebar:
         roznica = netto_body - target_chars
         delta_color = "normal" if abs(roznica) < 300 else "inverse"
         
-        st.metric("Treść (bez nagłówków)", value=netto_body, delta=f"{roznica} vs cel", delta_color=delta_color)
+        st.metric("Treść (bez propozycji)", value=netto_body, delta=f"{roznica} vs cel", delta_color=delta_color)
         btn_disabled = False
     else:
-        st.metric("Treść (bez nagłówków)", value=0, delta="oczekiwanie")
+        st.metric("Treść (bez propozycji)", value=0, delta="oczekiwanie")
         btn_disabled = True
         
     c1, c2 = st.columns(2)
     
     if c1.button("Skróć", disabled=btn_disabled, use_container_width=True):
         with st.spinner("Skracam..."):
-            prompt_short = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ do ok. {target_chars} znaków. Zachowaj nagłówki. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{current_text}"
+            prompt_short = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ (tę pod nagłówkiem ###) do ok. {target_chars} znaków. Zachowaj strukturę i separator. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{current_text}"
             res = model.generate_content(prompt_short)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Skrót)")
@@ -176,7 +197,7 @@ with st.sidebar:
             
     if c2.button("Wydłuż", disabled=btn_disabled, use_container_width=True):
         with st.spinner("Rozwijam..."):
-            prompt_long = f"Wydłuż TREŚĆ WŁAŚCIWĄ do ok. {target_chars} znaków, dodając detale. Zachowaj nagłówki. ZAKAZ cudzysłowów.\n\n{current_text}"
+            prompt_long = f"Wydłuż TREŚĆ WŁAŚCIWĄ (tę pod nagłówkiem ###) do ok. {target_chars} znaków. Zachowaj separator. ZAKAZ cudzysłowów.\n\n{current_text}"
             res = model.generate_content(prompt_long)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
@@ -241,8 +262,7 @@ if uploaded_files:
     for f in uploaded_files:
         source_content += f"\n\n--- PLIK: {f.name} ---\n" + read_text_file(f)
 
-# --- ŁADOWANIE MANIFESTÓW Z PLIKÓW ---
-# Teraz kod ładuje treść z plików, które wgrałeś obok
+# --- ŁADOWANIE MANIFESTÓW ---
 if typ_tekstu == "Wywiad":
     manifest = load_manifest_from_file("manifest_wywiad.txt", target_chars)
 else:
@@ -252,15 +272,12 @@ else:
 if st.button("🚀 Generuj Materiał"):
     content_payload = [manifest]
     
-    # Dodajemy kontekst (notatki/linki)
     if context_data:
-        content_payload.append(f"DODATKOWY KONTEKST (Linki/Notatki):\n{context_data}")
+        content_payload.append(f"DODATKOWY KONTEKST:\n{context_data}")
         
-    # Dodajemy główny materiał (pliki)
     if source_content: 
         content_payload.append(f"GŁÓWNY MATERIAŁ ŹRÓDŁOWY:\n{source_content}")
     
-    # Dodajemy audio
     if uploaded_audio:
         with st.spinner("Przesyłam audio do Gemini 3..."):
             with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
@@ -270,19 +287,19 @@ if st.button("🚀 Generuj Materiał"):
                 audio_file = genai.get_file(audio_file.name)
             content_payload.append(audio_file)
 
-    # Strażnik Długości (Word Proxy)
+    # Word Proxy & Separator Check
     length_enforcer = f"""
-    *** INSTRUKCJA PRIORYTETOWA (KONTROLA DŁUGOŚCI) ***
-    Użytkownik wymaga tekstu o objętości ok. {target_chars} znaków netto (licząc BEZ nagłówków).
-    DLA CIEBIE OZNACZA TO: Napisz samą treść właściwą na około {target_words} SŁÓW.
-    Jeśli materiału jest za dużo -> PO PROSTU ODETNIJ mniej ważne wątki.
+    *** INSTRUKCJA PRIORYTETOWA ***
+    1. Koniecznie wstaw separator: ### {("WYWIAD" if typ_tekstu == "Wywiad" else "ARTYKUŁ")} po sekcji propozycji.
+    2. Tekst WŁAŚCIWY (pod separatorem) ma mieć ok. {target_words} słów.
+    Jeśli masz za dużo materiału -> USUŃ mniej ważne wątki.
     """
     content_payload.append(length_enforcer)
 
     with st.spinner("Generowanie tekstu..."):
         try:
             if not source_content and not uploaded_audio:
-                st.error("Brak materiału źródłowego (pliki lub audio).")
+                st.error("Brak materiału źródłowego!")
             else:
                 response = model.generate_content(content_payload)
                 st.session_state.artykul = response.text

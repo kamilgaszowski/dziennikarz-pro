@@ -17,6 +17,8 @@ Automatycznie dodaję też:
 Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).
 Lid i pierwszy akapit nie mogą zaczynać się od daty.
 
+2a) SEPARATOR Po wypisaniu powyższych propozycji wstaw wyraźny nagłówek: ### ARTYKUŁ I dopiero pod nim pisz właściwą treść artykułu. 
+
 3) Struktura tekstu głównego
 Tekst ma brzmieć jak relacja prasowa, nie streszczenie.
 Zwykle cel: 6–10 akapitów.

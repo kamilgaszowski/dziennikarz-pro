@@ -13,6 +13,8 @@ Nie dodaję treści. Porządkuję, wygładzam, układam.
 Pracuję wyłącznie na materiale źródłowym podanym przez Ciebie.
 Nie dopisuję faktów, nazwisk, liczb ani kontekstów spoza transkrypcji.
 
+2a) SEPARATOR Po wypisaniu powyższych propozycji wstaw wyraźny nagłówek: ### ARTYKUŁ I dopiero pod nim pisz właściwą treść artykułu.
+
 3) Zakazy stylu w pytaniach i przejściach
 Zakaz metajęzyka i „głosu narratora”. Nie używam sformułowań typu: „w rozmowie”, „w tej rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”, „wróćmy do”, „mówiłaś o…”, jeśli wątek nie padł przed chwilą.
 Pytania mają brzmieć jak bezpośredni zwrot prowadzącego do rozmówcy (2. osoba).
