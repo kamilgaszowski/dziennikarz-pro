@@ -96,7 +96,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v14.1")
+st.title("🖋️ Dziennikarz Master PRO v14.2")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -115,13 +115,19 @@ def read_text_file(uploaded_file):
     except: return ""
     return ""
 
-# --- PANEL BOCZNY (Z PRZENIESIONYMI PRZYCISKAMI) ---
+# --- PANEL BOCZNY ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
-    target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     
-    # --- NOWA SEKCJA: STATUS I KOREKTA (Tylko gdy jest artykuł) ---
+    # SUWAK Z PRZELICZNIKIEM NA SŁOWA
+    target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
+    # Przelicznik: średnie polskie słowo + spacja to ok. 7 znaków.
+    # AI lepiej rozumie "napisz 500 słów" niż "napisz 3500 znaków".
+    target_words = int(target_chars / 7)
+    st.caption(f"AI otrzyma cel: ok. {target_words} słów.")
+    
+    # --- STATUS I KOREKTA ---
     if "artykul" in st.session_state:
         st.divider()
         st.markdown("### 📊 Status i Korekta")
@@ -130,22 +136,32 @@ with st.sidebar:
         netto = count_net_chars(tekst_obecny)
         roznica = netto - target_chars
         
-        # Licznik
-        st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
+        # Kolor delty
+        delta_color = "normal" if abs(roznica) < 300 else "inverse"
         
-        # Przyciski korekty
+        st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} względem celu", delta_color=delta_color)
+        
         col_k1, col_k2 = st.columns(2)
-        if col_k1.button("✂️ Skróć 20%"):
-            with st.spinner("Skracam..."):
-                prompt_short = f"Skróć o 20% (cel: {int(netto*0.8)}), ZAKAZ słowa 'kapłan':\n\n{tekst_obecny}"
+        if col_k1.button("✂️ Skróć"):
+            with st.spinner("Skracam agresywnie..."):
+                # Agresywny prompt skracający
+                prompt_short = f"""
+                ZADANIE: Skróć tekst do ok. {target_chars} znaków netto (ok. {target_words} słów).
+                PRIORYTET: Usunięcie najmniej ważnych wątków/cytatów.
+                ZAKAZ: Nie zmieniaj stylu ani struktury nagłówków.
+                ZAKAZ: Słowa 'kapłan'.
+                
+                Tekst do skrócenia:
+                {tekst_obecny}
+                """
                 res = model.generate_content(prompt_short)
                 st.session_state.artykul = res.text
                 add_to_history(res.text, f"{typ_tekstu} (Skrót)")
                 st.rerun()
                 
-        if col_k2.button("➕ Wydłuż 20%"):
-            with st.spinner("Wydłużam..."):
-                prompt_long = f"Wydłuż o 20% (cel: {int(netto*1.2)}), ZAKAZ cudzysłowów:\n\n{tekst_obecny}"
+        if col_k2.button("➕ Wydłuż"):
+            with st.spinner("Rozwijam..."):
+                prompt_long = f"Wydłuż tekst do ok. {target_chars} znaków, dodając więcej szczegółów z kontekstu (jeśli to możliwe), ale NIE WODY. Zachowaj checklistę.\n\n{tekst_obecny}"
                 res = model.generate_content(prompt_long)
                 st.session_state.artykul = res.text
                 add_to_history(res.text, f"{typ_tekstu} (Długi)")
@@ -154,7 +170,6 @@ with st.sidebar:
     # --- HISTORIA ---
     st.divider()
     st.subheader("🗄️ Historia (Trwała)")
-    
     if len(st.session_state.history) > 0:
         for i, item in enumerate(st.session_state.history):
             with st.container():
@@ -185,13 +200,10 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- PEŁNE MANIFESTY (100% TWOJEJ TREŚCI) ---
+# --- MANIFESTY (100% ORYGINAŁU Z TWOICH PLIKÓW) ---
 
-# 1. WYWIAD
 manifest_wywiad_full = f"""
 JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE WYWIADU.
-DOCELOWA DŁUGOŚĆ TEKSTU: ok. {target_chars} znaków netto (bez spacji/enterów).
-
 PEŁNE WYTYCZNE REDAKCYJNE:
 
 Wywiad
@@ -208,7 +220,7 @@ Nie dopisuję faktów, nazwisk, liczb ani kontekstów spoza transkrypcji.
 Zakaz metajęzyka i „głosu narratora”. Nie używam sformułowań typu: „w rozmowie”, „w tej rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”, „wróćmy do”, „mówiłaś o…”, jeśli wątek nie padł przed chwilą.
 Pytania mają brzmieć jak bezpośredni zwrot prowadzącego do rozmówcy (2. osoba).
 
-4) Anty-kompresja
+4) Anty-kompresja (UWAGA: ZALEŻNA OD LIMITU ZNAKÓW - PATRZ PRIORYTET DŁUGOŚCI)
 Nie spłaszczam wypowiedzi do streszczeń.
 Zachowuję sceny, przykłady, dopowiedzenia, mikrokontrpytania.
 Skracam najpierw: oczywiste powtórzenia, „yyy/eee”, dygresje techniczne.
@@ -241,28 +253,19 @@ Automatycznie dodaję też:
 Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).
 Lid i pierwszy akapit nie mogą zaczynać się od daty.
 
-
 Checklista przed wysyłką wywiadu:
-[ ] Pracuję wyłącznie na materiale źródłowym, bez dopisywania faktów, nazwisk i kontekstów spoza transkrypcji
-[ ] Forma jest Q/A, bez dodatkowego „głosu narratora” między pytaniami i odpowiedziami
-[ ] W pytaniach nie ma metajęzyka typu „w rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”
-[ ] Pytania są w 2. osobie i brzmią jak bezpośredni zwrot prowadzącego do rozmówcy
-[ ] Nie ma odwołań „mówiłaś/wspominałaś/wróćmy do”, jeśli temat nie padł w maksymalnie 1 Q/A wstecz
-[ ] Jeśli temat pochodzi z dalszej części transkrypcji, pytanie wprowadza go od zera, bez presupozycji
-[ ] Anty-kompresja: zachowane są sceny, przykłady, dopowiedzenia i mikrokontrpytania, bez spłaszczania do streszczeń
-[ ] Skróty dotyczą najpierw oczywistych powtórzeń, dygresji technicznych i „yyy/eee”, a nie treści merytorycznej
-[ ] „Mniej pytań” oznacza większe pytania i ewentualnie krótkie mikrokontrpytania, a nie skracanie odpowiedzi
-[ ] Redakcja wypowiedzi rozmówcy jest do wersji „do druku” bez zmiany sensu, z poprawą składni i interpunkcji
-[ ] Usunięte są wypełniacze i nadmiarowe „ja” wszędzie tam, gdzie wystarcza czasownik
-[ ] Zwracam jedną spójną wersję ciągłą.
-[ ] Po tekście głównym dodaję sekcję „KOTWICE I PEREŁKI” – listę 3-5 najmocniejszych cytatów z rozmowy.
+[ ] Pracuję wyłącznie na materiale źródłowym
+[ ] Forma Q/A
+[ ] Brak metajęzyka
+[ ] Pytania w 2. osobie
+[ ] Anty-kompresja (chyba że limit znaków wymusza cięcia)
+[ ] Redakcja do języka pisanego
+[ ] Brak słowa "kapłan"
+[ ] Sekcja "KOTWICE I PEREŁKI" na końcu
 """
 
-# 2. NEWS / REPORTAŻ
 manifest_news_full = f"""
 JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE ARTYKUŁU / RELACJI.
-DOCELOWA DŁUGOŚĆ TEKSTU: ok. {target_chars} znaków netto (bez spacji/enterów).
-
 PEŁNE WYTYCZNE REDAKCYJNE:
 
 Artykuł / News
@@ -307,18 +310,14 @@ Gęstość: Celuję w jeden solidny blok cytatu na jeden akapit tekstu.
 Nie używam słowa „kapłan” i jego odmian (zastąp: duchowny, ksiądz, duszpasterz).
 
 Checklista przed wysyłką artykułu:
-[ ] Pracuję tylko na materiale źródłowym, bez dopisywania faktów spoza pliku
-[ ] Na początku są nadtytuł, tytuł, lid oraz 5 propozycji tytułów i 3 propozycje lidów
-[ ] Nadtytuł, tytuł i lid nie powtarzają żadnych słów między sobą
-[ ] Lid i pierwszy akapit nie zaczynają się od daty
-[ ] Tekst ma formę relacji prasowej i trzyma ustaloną strukturę akapitów
-[ ] W tekście nie ma średników ani dwukropków
-[ ] W tekście własnym nie ma zdań z myślnikami, wyjątek dotyczy wyłącznie formatu cytowania
-[ ] Cytaty są bez cudzysłowów i są redagowane do języka pisanego
-[ ] Każdy cytat ma minimum cztery zdania
-[ ] Przed każdym cytatem są minimum trzy zdania kontekstu
-[ ] Po każdym cytacie są minimum trzy zdania rozwinięcia
-[ ] Nie ma słowa „kapłan”
+[ ] Materiał tylko ze źródła
+[ ] Nagłówki + propozycje
+[ ] Styl reporterski
+[ ] Brak średników i dwukropków
+[ ] Cytaty bez cudzysłowów (pauzy)
+[ ] Cytaty min. 4 zdania
+[ ] Kontekst min. 3 zdania
+[ ] Brak słowa "kapłan"
 """
 
 if typ_tekstu == "Wywiad":
@@ -329,7 +328,7 @@ else:
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
     
-    # 1. Budowa promptu bazowego
+    # 1. Budowa promptu
     content_payload = [manifest]
     if all_source: content_payload.append(f"TEKST ŹRÓDŁOWY:\n{all_source}")
     
@@ -343,12 +342,19 @@ if st.button("🚀 Generuj Materiał"):
                 audio_file = genai.get_file(audio_file.name)
             content_payload.append(audio_file)
 
-    # 3. STRAŻNIK DŁUGOŚCI (NA KOŃCU)
+    # 3. AGRESYWNY STRAŻNIK DŁUGOŚCI (SŁOWA)
+    # Wyjaśniamy modelowi, że musi przeliczyć słowa, bo znaki mu nie wychodzą.
     length_enforcer = f"""
-    *** INSTRUKCJA PRIORYTETOWA (DŁUGOŚĆ) ***
-    Użytkownik ustawił limit: {target_chars} znaków netto.
-    Obowiązek: Celuj w przedział {int(target_chars * 0.9)} - {int(target_chars * 1.1)} znaków.
-    Jeśli materiału jest za dużo - selekcjonuj wątki, ale nie streszczaj tych wybranych.
+    *** INSTRUKCJA PRIORYTETOWA (KONTROLA DŁUGOŚCI) ***
+    Użytkownik wymaga tekstu o objętości ok. {target_chars} znaków netto.
+    
+    DLA CIEBIE OZNACZA TO: Napisz tekst na około {target_words} SŁÓW.
+    
+    REGUŁA NADRZĘDNA:
+    Jeśli materiału źródłowego jest za dużo, aby zmieścić się w {target_words} słowach:
+    -> IGNORUJ zasadę "anty-kompresji". 
+    -> PO PROSTU ODETNIJ/USUŃ mniej ważne wątki.
+    -> Lepiej opisać 3 wątki dokładnie (zgodnie ze stylem) i zmieścić się w limicie, niż streścić wszystko po łebkach.
     """
     content_payload.append(length_enforcer)
 
@@ -364,9 +370,7 @@ if st.button("🚀 Generuj Materiał"):
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     
-    # GŁÓWNE OKNO (Standardowe st.code + CSS Fix)
     st.subheader("Gotowy Artykuł:")
     st.code(tekst, language="markdown", wrap_lines=True)
     
-    # Pobieranie
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
