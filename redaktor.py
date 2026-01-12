@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS ---
+# --- CSS (HARDCORE CUSTOMIZATION) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -81,14 +81,36 @@ st.markdown("""
     [data-testid='stFileUploader'] section:hover { border-color: #888; background-color: #1c1f26; }
     [data-testid='stFileUploader'] svg { display: none; }
 
-    /* 3. BUTTON */
+    /* 3. BUTTONS (GLOBAL) */
     div.stButton > button {
         background-color: #2b2d35; color: #ffffff; border: 1px solid #41444e;
-        border-radius: 6px; font-size: 14px; padding: 0.5rem 1rem; width: 100%;
+        border-radius: 4px; font-size: 14px; padding: 0.5rem 1rem; width: 100%;
     }
     div.stButton > button:hover { background-color: #ffffff; color: #000000; border-color: #ffffff; }
 
-    /* 4. HISTORIA */
+    /* 4. SIDEBAR SPECIFIC (COMPACT HISTORY) */
+    /* Zmniejszamy przyciski w sidebarze, żeby historia była gęstsza */
+    [data-testid="stSidebar"] div.stButton > button {
+        padding: 4px 8px !important; /* Bardzo mały padding */
+        font-size: 13px !important;
+        height: auto !important;
+        min-height: 0px !important;
+        margin-top: 0px !important;
+        margin-bottom: 0px !important;
+        line-height: 1.2 !important;
+    }
+    
+    /* Zmniejszenie odstępów między kolumnami w historii */
+    [data-testid="stSidebar"] [data-testid="column"] {
+        padding: 0px 2px !important;
+    }
+
+    /* Ukrycie standardowych marginesów kontenerów w sidebarze */
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 2rem;
+    }
+
+    /* 5. HISTORIA */
     div[data-testid="stCodeBlock"] { border: 1px solid #333; background-color: #0e1117; }
     .stDeployButton {display:none;}
     div[data-testid="stSidebar"] button { text-align: left; }
@@ -193,7 +215,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.6</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.7</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -206,52 +228,56 @@ with st.sidebar:
     st.divider()
     typ_tekstu = st.radio("Rodzaj:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     
-    # SUWAK
+    # SUWAK I STATUS
     target_chars = st.slider("Cel znaków (treść):", 500, 15000, value=3500, step=500)
     target_words = int(target_chars / 7)
     st.caption(f"Cel: ~{target_words} słów.")
 
-    # NOWY STATUS (Custom HTML - mniejszy font, bez "zn.")
     current_text = st.session_state.get("artykul", "")
-    
     netto = 0
     diff_html = ""
     
     if current_text:
         netto = count_body_chars_only(current_text)
         diff = netto - target_chars
-        
-        # Kolor różnicy (zielonkawy jeśli blisko celu, czerwonawy jeśli daleko)
         color = "#66bb6a" if abs(diff) < 300 else "#ef5350"
         sign = "+" if diff > 0 else ""
         diff_html = f'<span style="color: {color}; margin-left: 8px; font-size: 12px;">{sign}{diff}</span>'
     else:
         diff_html = '<span style="color: #666; margin-left: 8px; font-size: 12px;">...</span>'
 
-    # Renderowanie własnego boksu statusu
     st.markdown(f"""
-    <div style="background-color: #16181e; border: 1px solid #333; border-radius: 6px; padding: 10px; margin-top: 5px;">
-        <p style="margin: 0; font-size: 11px; color: #888; text-transform: uppercase;">Obecna długość (netto)</p>
-        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #e0e0e0; font-family: monospace;">
+    <div style="background-color: #16181e; border: 1px solid #333; border-radius: 6px; padding: 8px; margin-top: 5px;">
+        <p style="margin: 0; font-size: 10px; color: #888; text-transform: uppercase;">Obecna długość (netto)</p>
+        <p style="margin: 0; font-size: 14px; font-weight: 600; color: #e0e0e0; font-family: monospace;">
             {netto} {diff_html}
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    # HISTORIA
+    # HISTORIA KOMPAKTOWA
     st.divider()
     st.subheader("Historia")
     if st.session_state.history:
         for i, item in enumerate(st.session_state.history):
-            cl, cd = st.columns([4, 1])
-            with cl: 
+            # Używamy CSS-owego ścisku. Layout 5:1
+            c1, c2 = st.columns([5, 1])
+            with c1:
+                # Główny przycisk z tytułem
                 if st.button(item.get('title','Bez tytułu'), key=f"l{i}", use_container_width=True):
                     st.session_state.artykul = item['content']
                     st.rerun()
-            with cd: 
-                st.button("X", key=f"d{i}", on_click=delete_history_item, args=(i,))
-            st.caption(f"{item.get('type','AI')} | {item['time']} | {item.get('chars',0)} zn.")
-            st.markdown("<hr style='margin: 5px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+            with c2:
+                # Malutki przycisk kosza
+                st.button("🗑️", key=f"d{i}", on_click=delete_history_item, args=(i,), help="Usuń")
+            
+            # Caption bardzo blisko przycisków
+            st.markdown(f"""
+            <div style="font-size: 10px; color: #666; margin-top: -12px; margin-bottom: 8px; margin-left: 4px;">
+                {item.get('type','AI')} | {item['time']} | {item.get('chars',0)}
+            </div>
+            """, unsafe_allow_html=True)
+            
         st.button("Wyczyść wszystko", on_click=clear_all_history)
     else: st.caption("Pusto.")
 
@@ -266,12 +292,10 @@ docs_to_proc = []
 
 with col_left:
     uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
-    
     if uploaded:
         for f in uploaded:
             if f.name.endswith(('.mp3','.wav','.m4a')): audio_to_proc = f
             else: docs_to_proc.append(f)
-        
         info = []
         if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
         if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
