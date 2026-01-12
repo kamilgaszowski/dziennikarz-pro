@@ -1,5 +1,6 @@
 streamlit
 google-generativeai
+openai
 python-docx
 pypdf2
 google-cloud-speech

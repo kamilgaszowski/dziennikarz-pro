@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import openai
 import time
 import io
 import json
@@ -8,13 +9,23 @@ import re
 from datetime import datetime
 
 # 1. KONFIGURACJA API
+# --- GEMINI (Wersja 3 Pro) ---
 try:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    model = genai.GenerativeModel('gemini-3-pro-preview') 
+    # ZMIANA: Sztywno ustawiony model Gemini 3
+    gemini_model = genai.GenerativeModel('gemini-3-pro-preview') 
 except Exception as e:
-    st.error(f"Błąd API: {e}")
+    st.error(f"Błąd API Google: {e}")
 
-# 2. BIBLIOTEKI
+# --- OPENAI (Wersja 5.2) ---
+try:
+    openai_client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    HAS_OPENAI = True
+except Exception as e:
+    HAS_OPENAI = False
+    print(f"Brak klucza OpenAI: {e}")
+
+# 2. BIBLIOTEKI PLIKÓW
 try:
     from docx import Document
     import PyPDF2
@@ -22,6 +33,7 @@ try:
 except ImportError:
     HAS_LIBS = False
 
+# 3. BIBLIOTEKI WEB
 try:
     import requests
     from bs4 import BeautifulSoup
@@ -32,6 +44,25 @@ except ImportError:
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
 # --- FUNKCJE POMOCNICZE ---
+
+def call_openai_gpt5(system_prompt, user_content):
+    """Funkcja wysyłająca zapytanie do GPT-5.2."""
+    if not HAS_OPENAI:
+        return "BŁĄD: Brak klucza OPENAI_API_KEY w secrets."
+    
+    try:
+        response = openai_client.chat.completions.create(
+            # ZMIANA: Sztywno ustawiony model GPT-5.2
+            model="gpt-5.2",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ],
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Błąd OpenAI (GPT-5.2): {str(e)}"
 
 def load_manifest_from_file(filename, target_chars):
     if os.path.exists(filename):
@@ -107,11 +138,11 @@ def save_history_to_disk(history_list):
 if "history" not in st.session_state:
     st.session_state.history = load_history_from_disk()
 
-def add_to_history(text, type_label):
+def add_to_history(text, type_label, model_name="AI"):
     timestamp = datetime.now().strftime("%d-%m %H:%M")
     entry = {
         "time": timestamp,
-        "type": type_label,
+        "type": f"{type_label} ({model_name})",
         "content": text,
         "chars": count_body_chars_only(text),
         "title": extract_title_from_text(text)
@@ -119,9 +150,7 @@ def add_to_history(text, type_label):
     st.session_state.history.insert(0, entry)
     save_history_to_disk(st.session_state.history)
 
-# --- KLUCZOWA POPRAWKA: CALLBACK DO USUWANIA ---
 def delete_history_item(index):
-    """Funkcja wywoływana PRZED odświeżeniem strony"""
     if 0 <= index < len(st.session_state.history):
         st.session_state.history.pop(index)
         save_history_to_disk(st.session_state.history)
@@ -144,14 +173,11 @@ st.markdown("""
     div[data-testid="stCodeBlock"]::-webkit-scrollbar-track { background: #0e1117; }
     div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb { background-color: #262730; border-radius: 10px; border: 2px solid #0e1117; }
     .stDeployButton {display:none;}
-    
-    div[data-testid="stSidebar"] button {
-        text-align: left;
-    }
+    div[data-testid="stSidebar"] button { text-align: left; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v15.4")
+st.title("🖋️ Dziennikarz Master PRO v16.1")
 
 if not HAS_WEB_LIBS:
     st.warning("⚠️ Brak bibliotek requests/bs4. Linki nie będą działać.")
@@ -159,6 +185,14 @@ if not HAS_WEB_LIBS:
 # --- PANEL BOCZNY ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
+    
+    # WYBÓR MODELU (ZAKTUALIZOWANE NAZWY)
+    model_choice = st.radio("Wybierz Silnik AI:", ["Gemini 3 Pro", "GPT-5.2 (OpenAI)"])
+    
+    if model_choice == "GPT-5.2 (OpenAI)" and not HAS_OPENAI:
+        st.error("Brak klucza OpenAI w secrets!")
+    
+    st.divider()
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (TREŚĆ WŁAŚCIWA):", 500, 15000, value=3500, step=500)
     target_words = int(target_chars / 7)
@@ -174,7 +208,6 @@ with st.sidebar:
         netto_body = count_body_chars_only(current_text)
         roznica = netto_body - target_chars
         delta_color = "normal" if abs(roznica) < 300 else "inverse"
-        
         st.metric("Treść (netto)", value=netto_body, delta=f"{roznica} vs cel", delta_color=delta_color)
         btn_disabled = False
     else:
@@ -184,49 +217,55 @@ with st.sidebar:
     c1, c2 = st.columns(2)
     
     if c1.button("Skróć", disabled=btn_disabled, use_container_width=True):
-        with st.spinner("Skracam..."):
-            prompt_short = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ (tę pod nagłówkiem ###) do ok. {target_chars} znaków. Zachowaj strukturę i separator. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{current_text}"
-            res = model.generate_content(prompt_short)
-            st.session_state.artykul = res.text
-            add_to_history(res.text, f"{typ_tekstu} (Skrót)")
+        with st.spinner(f"Skracam używając {model_choice}..."):
+            prompt_short = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ (tę pod nagłówkiem ###) do ok. {target_chars} znaków. Zachowaj strukturę. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{current_text}"
+            
+            if model_choice == "GPT-5.2 (OpenAI)" and HAS_OPENAI:
+                res_text = call_openai_gpt5(system_prompt="Jesteś redaktorem.", user_content=prompt_short)
+            else:
+                # Domyślnie Gemini 3
+                res = gemini_model.generate_content(prompt_short)
+                res_text = res.text
+                
+            st.session_state.artykul = res_text
+            add_to_history(res_text, f"{typ_tekstu} (Skrót)", model_name=model_choice)
             st.rerun()
             
     if c2.button("Wydłuż", disabled=btn_disabled, use_container_width=True):
-        with st.spinner("Rozwijam..."):
+        with st.spinner(f"Rozwijam używając {model_choice}..."):
             prompt_long = f"Wydłuż TREŚĆ WŁAŚCIWĄ (tę pod nagłówkiem ###) do ok. {target_chars} znaków. Zachowaj separator. ZAKAZ cudzysłowów.\n\n{current_text}"
-            res = model.generate_content(prompt_long)
-            st.session_state.artykul = res.text
-            add_to_history(res.text, f"{typ_tekstu} (Długi)")
+            
+            if model_choice == "GPT-5.2 (OpenAI)" and HAS_OPENAI:
+                res_text = call_openai_gpt5(system_prompt="Jesteś redaktorem.", user_content=prompt_long)
+            else:
+                res = gemini_model.generate_content(prompt_long)
+                res_text = res.text
+                
+            st.session_state.artykul = res_text
+            add_to_history(res_text, f"{typ_tekstu} (Długi)", model_name=model_choice)
             st.rerun()
 
-    # --- HISTORIA (NAPRAWIONE USUWANIE - CALLBACK) ---
+    # --- HISTORIA ---
     st.divider()
     st.subheader("🗄️ Historia")
     
     if len(st.session_state.history) > 0:
         for i, item in enumerate(st.session_state.history):
-            # Używamy proporcji [4, 1] dla lepszego wyglądu
             col_load, col_del = st.columns([4, 1])
-            
             with col_load:
                 title_label = item.get('title', 'Bez tytułu')
-                # Unikalny klucz dla przycisku wczytania
                 if st.button(title_label, key=f"load_{i}_{item['time']}", use_container_width=True):
                     st.session_state.artykul = item['content']
                     st.rerun()
-            
             with col_del:
-                # KLUCZOWA ZMIANA: używamy on_click zamiast logiki wewnątrz if
                 st.button("❌", key=f"del_{i}_{item['time']}", on_click=delete_history_item, args=(i,))
             
-            # Informacje pod przyciskiem
             chars_display = item.get('chars', 0)
-            st.caption(f"{item['type']} | {item['time']} | {chars_display} zn.")
+            type_display = item.get('type', 'Nieznany')
+            st.caption(f"{type_display} | {item['time']} | {chars_display} zn.")
             st.markdown("<hr style='margin: 5px 0; opacity: 0.3;'>", unsafe_allow_html=True)
 
-        # Przycisk usuwania wszystkiego też na callbacku dla pewności
         st.button("🗑️ Usuń WSZYSTKO", type="primary", on_click=clear_all_history)
-        
     else:
         st.caption("Pusto.")
 
@@ -247,12 +286,15 @@ def read_text_file(uploaded_file):
 col_a, col_b, col_c = st.columns([1, 1, 1])
 with col_a:
     uploaded_audio = st.file_uploader("🎤 Audio (MP3/WAV):", type=['mp3', 'wav', 'm4a'])
+    if uploaded_audio and model_choice == "GPT-5.2 (OpenAI)":
+        st.warning("⚠️ GPT-5.2 (API) nie obsługuje plików audio w tym trybie. Przełączam na Gemini 3.")
+        
 with col_b:
     uploaded_files = st.file_uploader("📄 Pliki (PDF/DOCX):", accept_multiple_files=True)
 with col_c:
     pasted_text = st.text_area("✍️ Notatki i Linki:", height=100)
 
-# --- PRZETWARZANIE ---
+# --- PRZETWARZANIE DANYCH WEJŚCIOWYCH ---
 context_data = ""
 if pasted_text:
     urls = extract_urls(pasted_text)
@@ -275,41 +317,59 @@ if typ_tekstu == "Wywiad":
 else:
     manifest = load_manifest_from_file("manifest_news.txt", target_chars)
 
-# --- GENEROWANIE ---
+# --- GŁÓWNA LOGIKA GENEROWANIA ---
 if st.button("🚀 Generuj Materiał"):
-    content_payload = [manifest]
-    if context_data:
-        content_payload.append(f"DODATKOWY KONTEKST:\n{context_data}")
-    if source_content: 
-        content_payload.append(f"GŁÓWNY MATERIAŁ ŹRÓDŁOWY:\n{source_content}")
     
-    if uploaded_audio:
-        with st.spinner("Przesyłam audio do Gemini 3..."):
-            with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
-            audio_file = genai.upload_file(path="temp.mp3")
-            while audio_file.state.name == "PROCESSING": 
-                time.sleep(2)
-                audio_file = genai.get_file(audio_file.name)
-            content_payload.append(audio_file)
-
     length_enforcer = f"""
     *** INSTRUKCJA PRIORYTETOWA ***
     1. Koniecznie wstaw separator: ### {("WYWIAD" if typ_tekstu == "Wywiad" else "ARTYKUŁ")} po sekcji propozycji.
     2. Tekst WŁAŚCIWY (pod separatorem) ma mieć ok. {target_words} słów.
     Jeśli masz za dużo materiału -> USUŃ mniej ważne wątki.
     """
-    content_payload.append(length_enforcer)
+    
+    # SCENARIUSZ A: GPT-5.2
+    if model_choice == "GPT-5.2 (OpenAI)" and HAS_OPENAI and not uploaded_audio:
+        with st.spinner("Generowanie przez GPT-5.2..."):
+            full_user_content = ""
+            if context_data: full_user_content += f"DODATKOWY KONTEKST:\n{context_data}\n\n"
+            if source_content: full_user_content += f"GŁÓWNY MATERIAŁ:\n{source_content}\n\n"
+            full_user_content += length_enforcer
 
-    with st.spinner("Generowanie tekstu..."):
-        try:
-            if not source_content and not uploaded_audio:
+            if not source_content:
                 st.error("Brak materiału źródłowego!")
             else:
-                response = model.generate_content(content_payload)
-                st.session_state.artykul = response.text
-                add_to_history(response.text, typ_tekstu)
+                res_text = call_openai_gpt5(system_prompt=manifest, user_content=full_user_content)
+                st.session_state.artykul = res_text
+                add_to_history(res_text, typ_tekstu, model_name="GPT-5.2")
                 st.rerun()
-        except Exception as e: st.error(f"Błąd: {e}")
+
+    # SCENARIUSZ B: GEMINI 3 PRO (Domyślny + Audio fallback)
+    else:
+        content_payload = [manifest]
+        if context_data: content_payload.append(f"DODATKOWY KONTEKST:\n{context_data}")
+        if source_content: content_payload.append(f"GŁÓWNY MATERIAŁ:\n{source_content}")
+        content_payload.append(length_enforcer)
+        
+        if uploaded_audio:
+            with st.spinner("Przesyłam audio do Gemini 3..."):
+                with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
+                audio_file = genai.upload_file(path="temp.mp3")
+                while audio_file.state.name == "PROCESSING": 
+                    time.sleep(2)
+                    audio_file = genai.get_file(audio_file.name)
+                content_payload.append(audio_file)
+
+        with st.spinner(f"Generowanie przez Gemini 3..."):
+            try:
+                if not source_content and not uploaded_audio:
+                    st.error("Brak materiału źródłowego!")
+                else:
+                    response = gemini_model.generate_content(content_payload)
+                    st.session_state.artykul = response.text
+                    final_model_name = "Gemini 3" if model_choice == "Gemini 3 Pro" else "Gemini 3 (Audio)"
+                    add_to_history(response.text, typ_tekstu, model_name=final_model_name)
+                    st.rerun()
+            except Exception as e: st.error(f"Błąd Gemini: {e}")
 
 # --- WYNIKI ---
 if "artykul" in st.session_state:
