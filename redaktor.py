@@ -5,7 +5,6 @@ import io
 # 1. KONFIGURACJA API
 try:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    # Używamy gemini-3-pro-preview - jeśli u Ciebie działa, nie zmieniamy.
     model = genai.GenerativeModel('gemini-3-pro-preview') 
 except Exception as e:
     st.error(f"Błąd konfiguracji API: {e}")
@@ -19,7 +18,7 @@ except ImportError:
     HAS_LIBS = False
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
-st.title("🖋️ Dziennikarz Master PRO v11.4")
+st.title("🖋️ Dziennikarz Master PRO v11.5")
 
 if not HAS_LIBS:
     st.warning("⚠️ Brak bibliotek DOCX/PDF. Zainstaluj: pip install python-docx pypdf2")
@@ -43,7 +42,7 @@ def read_file(uploaded_file):
 with st.sidebar:
     st.header("⚙️ Ustawienia")
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
-    target_chars = st.slider("Docelowa liczba znaków:", 500, 15000, value=3500, step=500)
+    target_chars = st.slider("Docelowa liczba znaków (bez enterów):", 500, 15000, value=3500, step=500)
     st.info(f"Tryb: {typ_tekstu} | Cel: {target_chars} znaków")
 
 # --- WEJŚCIE DANYCH ---
@@ -58,70 +57,67 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- Materiał z: {f.name} ---\n" + read_file(f)
 
-# --- PEŁNE MANIFESTY Z TWOICH PLIKÓW ---
+# --- MANIFESTY Z POPRAWIONĄ INSTRUKCJĄ DŁUGOŚCI ---
+strict_length_instruction = f"""
+WAŻNE: Docelowa długość tekstu to równe {target_chars} znaków. 
+Limit ten nie obejmuje znaków nowej linii (enterów). 
+Jeśli materiału źródłowego jest mało, rozwiń wątki zgodnie ze stylem. 
+Jeśli jest za dużo, skracaj bez litości, zachowując esencję. 
+Bądź precyzyjny – AI często pisze za długo, Ty napisz dokładnie tyle, ile wskazano.
+"""
+
 if typ_tekstu == "Wywiad":
-    # Wdrożenie instrukcji z wywiad.txt [cite: 1-38]
     manifest = f"""
-    TRYB wywiad. Jesteś redaktorem. Twoim zadaniem jest zredagować z materiału wywiad w formie Q/A, ale z porządną redakcją językową wypowiedzi. Nie dodajesz treści, tylko porządkujesz i wygładzasz język[cite: 1, 2]. 
-    Traktuj to jako zadanie jednorazowe, bez stanu. Pracuj wyłącznie na materiale źródłowym[cite: 3, 4].
-    
-    ZAKAZY STYLU: Zakaz metajęzyka (np. 'w tej rozmowie', 'pada przykład', 'wróćmy do'). Pytania mają brzmieć naturalnie[cite: 6, 7]. Unikaj dwukropków i średników. Nie używaj pauz do dopowiedzeń[cite: 8]. Zakaz separatorów typu '---'[cite: 11]. Nie używaj słowa kapłan[cite: 10].
-    
-    NAGŁÓWKI: Przygotuj 5 zestawów (nadtytuł, tytuł max 3 słowa, lid 1-2 zdania). Zakaz powtórzeń słów w obrębie zestawu[cite: 12, 13, 16].
-    
-    LIDY W WYWIADZIE: Każdy musi zaczynać się od słowa O. Forma: O [czymś], o [czymś] i o [czymś] mówi [kto][cite: 17].
-    
-    KONSTRUKCJA: Forma Q/A (P: ... O: ...). Liczba bloków: 6-12[cite: 18, 19]. Styl eksploracyjny[cite: 20]. 
-    REDAKCJA: Zachowaj styl rozmówcy. Usuń 'ja' w 99% przypadków[cite: 26, 28]. Napraw neologizmy (dodaj sekcję ZAMIANY na końcu)[cite: 30, 32, 33].
-    
-    CEL DŁUGOŚCI: {target_chars} znaków ±300[cite: 36].
+    TRYB wywiad. {strict_length_instruction}
+    Jesteś redaktorem. Zredaguj wywiad Q/A. Pracuj wyłącznie na materiale źródłowym.
+    ZAKAZY: Metajęzyk, dwukropki, średniki, separatory, słowo 'kapłan'.
+    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid 1-2 zdania zaczynający się od 'O').
+    KONSTRUKCJA: Forma Q/A (P: ... O: ...). Liczba bloków: 6-12.
+    REDAKCJA: Usuń 'ja' w 99%. Napraw neologizmy (sekcja ZAMIANY na końcu).
     """
 else:
-    # Wdrożenie instrukcji z Instrukcja_artykul.txt [cite: 39-107]
     manifest = f"""
-    TRYB article. Jesteś redaktorem prasowym. Stwórz artykuł informacyjny[cite: 39]. 
-    Pracuj wyłącznie na materiale źródłowym[cite: 41]. 
-    
-    RDZEŃ: Co najmniej dwie trzecie treści musi pochodzić ze źródła głównego[cite: 48].
-    ZAKAZY: Zakaz metajęzyka i komentowania wypowiedzi (np. 'zdradza', 'wyznaje', 'wybrzmiewa')[cite: 50, 52]. Maksymalnie jedno przypisanie wypowiedzi (mówi/dodaje) na akapit[cite: 54].
-    TERMINOLOGIA: Nie używaj słowa kapłan. Zastąp go: ksiądz, duchowny, duszpasterz, proboszcz, wikary, prezbiter[cite: 57, 58].
-    
-    CYTATY: Zapis bez cudzysłowów, w osobnym akapicie, w ramce pauzowej: – Zdanie. Zdanie. Zdanie. Zdanie. –[cite: 71]. Każdy cytat ma min. 4 zdania. Min. 3 zdania kontekstu przed i po[cite: 72].
-    
-    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid 1-2 zdania). Zakaz powtórzeń słów w zestawie[cite: 77, 78, 82].
-    
-    STRUKTURA: Relacja z wydarzenia (min. 3 twarde fakty w 1. akapicie) lub tekst problemowy[cite: 91, 93, 96].
-    ZAKOŃCZENIE: Domknij tekst konkretem, informacją organizacyjną lub cytatem. Zakaz ogólnych refleksji i metafor[cite: 104, 105].
-    
-    CEL DŁUGOŚCI: {target_chars} znaków ±300[cite: 84].
+    TRYB article/news. {strict_length_instruction}
+    Jesteś redaktorem prasowym. Rdzeń: 2/3 treści ze źródła głównego.
+    ZAKAZY: Metajęzyk, słowo 'kapłan' (używaj: ksiądz, duszpasterz, proboszcz).
+    CYTATY: Ramka pauzowa: – Zdanie. Zdanie. Zdanie. Zdanie. – (min. 4 zdania).
+    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid).
+    STRUKTURA: Relacja (3 twarde fakty w 1. akapicie) lub tekst problemowy.
+    ZAKOŃCZENIE: Konkret lub cytat. Brak ogólnych refleksji.
     """
 
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
     if all_source.strip():
-        with st.spinner(f"Przetwarzam..."):
+        with st.spinner(f"Generowanie tekstu..."):
             try:
                 full_prompt = f"{manifest}\n\nMATERIAŁ ŹRÓDŁOWY:\n{all_source}"
                 response = model.generate_content(full_prompt)
                 st.session_state.artykul = response.text
             except Exception as e:
                 st.error(f"Błąd API: {e}")
-                st.info("Jeśli błąd 404 nadal występuje, spróbuj zamienić model na 'gemini-1.5-flash'.")
     else:
         st.error("Proszę dodać materiały źródłowe!")
 
-# --- WYNIKI I LICZNIK ---
+# --- WYNIKI I NOWY LICZNIK ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
-    dlugosc = len(tekst)
-    roznica = dlugosc - target_chars
+    
+    # NOWA LOGIKA: Liczymy znaki ignorując entery (\n)
+    dlugosc_bez_enterow = len(tekst.replace("\n", ""))
+    roznica = dlugosc_bez_enterow - target_chars
     
     st.divider()
-    # Licznik z inverse delta (ujemna różnica/niedobór = zielony)
-    st.metric(label="Liczba znaków", value=dlugosc, delta=f"{roznica} względem celu", delta_color="inverse")
+    
+    # Licznik pokazuje teraz wartość netto (bez enterów)
+    st.metric(
+        label="Liczba znaków (netto - bez enterów)", 
+        value=dlugosc_bez_enterow, 
+        delta=f"{roznica} względem celu", 
+        delta_color="inverse"
+    )
 
     st.subheader("Finalny tekst:")
-    # st.code zapewnia bezpieczne kopiowanie (ikona w rogu)
     st.code(tekst, language="markdown", wrap_lines=True)
     
     st.download_button(label="💾 Pobierz .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt", mime="text/plain")
