@@ -20,32 +20,49 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- CSS: PRZYKLEJONY PASEK NARZĘDZI ---
+# --- CSS: PŁYWAJĄCY PRZYCISK KOPIOWANIA (Floating Action Button) ---
 st.markdown("""
     <style>
-    .sticky-container {
-        position: -webkit-sticky;
-        position: sticky;
-        top: 2.8rem;
-        z-index: 1000;
-        background-color: #0e1117;
-        padding: 10px;
-        border-bottom: 2px solid #31333f;
-        margin-bottom: 20px;
+    /* Styl dla pływającego kontenera */
+    .floating-copy-container {
+        position: fixed;
+        top: 80px;
+        right: 50px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: rgba(14, 17, 23, 0.9);
+        padding: 15px;
+        border-radius: 15px;
+        border: 1px solid #31333f;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
-    .copy-btn {
+    .floating-btn {
         background-color: #ff4b4b;
         color: white;
         border: none;
-        padding: 8px 16px;
-        border-radius: 5px;
+        padding: 10px 20px;
+        border-radius: 8px;
         cursor: pointer;
         font-weight: bold;
+        text-align: center;
+        transition: 0.3s;
+    }
+    .floating-btn:hover {
+        background-color: #ff2b2b;
+        transform: scale(1.05);
+    }
+    .char-counter {
+        color: white;
+        font-size: 0.85rem;
+        text-align: center;
+        font-family: monospace;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v12.1")
+st.title("🖋️ Dziennikarz Master PRO v12.2")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -70,7 +87,7 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     st.divider()
-    st.caption("v12.1 | Sticky Copy Mode")
+    st.caption("v12.2 | Floating Copy Mode")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -89,7 +106,7 @@ if uploaded_files:
 # --- MANIFESTY ---
 strict_length = f"CEL: {target_chars} znaków netto (bez enterów)."
 if typ_tekstu == "Wywiad":
-    manifest = f"TRYB wywiad. {strict_length} Redaguj Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów."
+    manifest = f"TRYB wywiad. {strict_length} Redaguj Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów (nadtytuł, tytuł, lid na 'O')."
 else:
     manifest = f"TRYB article/news. {strict_length} Redaktor prasowy. Rdzeń: 2/3 treści. Cytaty w ramce pauzowej. Zakaz słowa 'kapłan'."
 
@@ -98,47 +115,46 @@ if st.button("🚀 Generuj Materiał"):
     content = [manifest]
     if all_source: content.append(f"TEKST:\n{all_source}")
     if uploaded_audio:
-        with st.spinner("AI słucha nagrania..."):
+        with st.spinner("Przesyłam audio do Gemini 3..."):
             with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
             audio_file = genai.upload_file(path="temp.mp3")
             while audio_file.state.name == "PROCESSING": time.sleep(2); audio_file = genai.get_file(audio_file.name)
             content.append(audio_file)
 
-    with st.spinner("Generowanie..."):
+    with st.spinner("AI tworzy tekst..."):
         try:
             response = model.generate_content(content)
             st.session_state.artykul = response.text
         except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI Z PRZYPIĘTYM PASKIEM ---
+# --- WYNIKI Z PŁYWAJĄCYM PRZYCISKIEM ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # --- PRZYPIĘTY PASEK (HTML + JS) ---
-    # Ten element będzie zawsze widoczny na górze podczas przewijania
-    escaped_text = tekst.replace("'", "\\'").replace("\n", "\\n")
+    # --- PŁYWAJĄCY PRZYCISK (HTML + JS) ---
+    # Ten element będzie "podążał" za użytkownikiem
+    escaped_text = tekst.replace("`", "\\`").replace("$", "\\$").replace("\n", "\\n")
     st.markdown(f"""
-        <div class="sticky-container">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="color: white; font-size: 1.1rem;">
-                    <b>Licznik Netto: {netto}</b> | Cel: {target_chars} ({roznica})
-                </div>
-                <button class="copy-btn" onclick="copyToClipboard()">📋 KOPIUJ ARTYKUŁ</button>
+        <div class="floating-copy-container">
+            <div class="char-counter">
+                <b>{netto} znaków</b><br>
+                <span style="font-size: 0.7rem; color: #aaa;">cel: {target_chars}</span>
             </div>
+            <button class="floating-btn" onclick="copyText()">📋 KOPIUJ</button>
         </div>
         <script>
-        function copyToClipboard() {{
-            const text = `{escaped_text}`;
-            navigator.clipboard.writeText(text).then(() => {{
-                alert('Skopiowano artykuł do schowka!');
+        function copyText() {{
+            const t = `{escaped_text}`;
+            navigator.clipboard.writeText(t).then(() => {{
+                alert('Skopiowano artykuł ({netto} znaków)!');
             }});
         }}
         </script>
     """, unsafe_allow_html=True)
 
-    # Przyciski korekty pod paskiem
+    # Przyciski korekty
     c1, c2 = st.columns(2)
     if c1.button("✂️ Skróć o 20%"):
         res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
