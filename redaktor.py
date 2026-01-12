@@ -50,6 +50,9 @@ st.markdown("""
         border-radius: 10px;
         border: 2px solid #0e1117;
     }
+    div[data-testid=" stCodeCopyButton"]::-webkit-scrollbar-thumb {
+        position: fixed;
+    }
     
     /* Ukrycie zbędnych przycisków Streamlit, zostaje tylko Copy */
     .stDeployButton {display:none;}
