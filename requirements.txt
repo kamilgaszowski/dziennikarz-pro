@@ -3,3 +3,5 @@ google-generativeai
 python-docx
 pypdf2
 google-cloud-speech
+requests
+beautifulsoup4
