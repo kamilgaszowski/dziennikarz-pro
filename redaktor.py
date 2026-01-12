@@ -31,39 +31,6 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- NOWA FUNKCJA LICZĄCA (OD SEPARATORA) ---
-def count_body_chars_only(text):
-    """
-    Liczy znaki TYLKO w treści właściwej, pomijając sekcję propozycji.
-    Szuka separatorów: ### ARTYKUŁ lub ### WYWIAD.
-    """
-    if not text: return 0
-    
-    # Normalizacja (usuwamy znaki końca linii dla łatwiejszego liczenia netto)
-    clean_text = text.replace("\r", "")
-    
-    # Szukamy separatorów
-    separators = ["### ARTYKUŁ", "### WYWIAD", "### TREŚĆ"]
-    
-    start_index = -1
-    
-    for sep in separators:
-        if sep in clean_text:
-            # Znaleziono separator - bierzemy wszystko co jest PO nim
-            parts = clean_text.split(sep, 1)
-            if len(parts) > 1:
-                content_part = parts[1]
-                # Liczymy znaki netto (bez enterów) w tej części
-                return len(content_part.replace("\n", ""))
-            
-    # FALLBACK: Jeśli AI zapomni separatora, próbujemy pominąć pierwsze 15 linii (meta-dane)
-    lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
-    if len(lines) > 10:
-        # Zakładamy, że propozycje zajmują początek, bierzemy ostatnie 80% tekstu
-        return int(len(clean_text.replace("\n", "")) * 0.8)
-        
-    return len(clean_text.replace("\n", ""))
-
 # --- FUNKCJE POMOCNICZE ---
 
 def load_manifest_from_file(filename, target_chars):
@@ -95,12 +62,31 @@ def fetch_url_content(url):
         return "\n".join(lines)[:8000]
     except: return ""
 
+def count_body_chars_only(text):
+    """
+    Liczy znaki TYLKO w treści właściwej, pomijając sekcję propozycji.
+    Szuka separatorów: ### ARTYKUŁ lub ### WYWIAD.
+    """
+    if not text: return 0
+    clean_text = text.replace("\r", "")
+    separators = ["### ARTYKUŁ", "### WYWIAD", "### TREŚĆ"]
+    for sep in separators:
+        if sep in clean_text:
+            parts = clean_text.split(sep, 1)
+            if len(parts) > 1:
+                content_part = parts[1]
+                return len(content_part.replace("\n", ""))
+    lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
+    if len(lines) > 10:
+        return int(len(clean_text.replace("\n", "")) * 0.8)
+    return len(clean_text.replace("\n", ""))
+
 # --- HISTORIA ---
 HISTORY_FILE = "historia_redaktora.json"
 
 def extract_title_from_text(text):
     lines = [line.strip() for line in text.split('\n') if line.strip()]
-    for line in lines[:15]: # Szukamy głębiej
+    for line in lines[:15]:
         if line.lower().startswith("tytuł:") or line.lower().startswith("tytuł"):
             return line.split(":", 1)[-1].strip().replace("*", "")
     if len(lines) >= 2: return lines[1].replace("#", "").replace("*", "").strip()
@@ -111,7 +97,6 @@ def load_history_from_disk():
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                # Migracja dla nowych liczników
                 for item in data:
                     if "chars" not in item:
                         item["chars"] = count_body_chars_only(item["content"])
@@ -132,7 +117,7 @@ def add_to_history(text, type_label):
         "time": timestamp,
         "type": type_label,
         "content": text,
-        "chars": count_body_chars_only(text), # UŻYWAMY NOWEJ FUNKCJI
+        "chars": count_body_chars_only(text),
         "title": extract_title_from_text(text)
     }
     st.session_state.history.insert(0, entry)
@@ -152,10 +137,15 @@ st.markdown("""
     div[data-testid="stCodeBlock"]::-webkit-scrollbar-track { background: #0e1117; }
     div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb { background-color: #262730; border-radius: 10px; border: 2px solid #0e1117; }
     .stDeployButton {display:none;}
+    
+    /* Stylizacja przycisków w historii, aby wyglądały bardziej jak kafelki */
+    div[data-testid="stSidebar"] button {
+        text-align: left;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v15.1")
+st.title("🖋️ Dziennikarz Master PRO v15.2")
 
 if not HAS_WEB_LIBS:
     st.warning("⚠️ Brak bibliotek requests/bs4. Linki nie będą działać.")
@@ -170,7 +160,7 @@ with st.sidebar:
     
     # --- STATUS I KOREKTA ---
     st.divider()
-    st.markdown("### 📊 Status i Korekta")
+    st.markdown("### 📊 Status")
     
     current_text = st.session_state.get("artykul", "")
     
@@ -179,10 +169,10 @@ with st.sidebar:
         roznica = netto_body - target_chars
         delta_color = "normal" if abs(roznica) < 300 else "inverse"
         
-        st.metric("Treść (bez propozycji)", value=netto_body, delta=f"{roznica} vs cel", delta_color=delta_color)
+        st.metric("Treść (netto)", value=netto_body, delta=f"{roznica} vs cel", delta_color=delta_color)
         btn_disabled = False
     else:
-        st.metric("Treść (bez propozycji)", value=0, delta="oczekiwanie")
+        st.metric("Treść (netto)", value=0, delta="oczekiwanie")
         btn_disabled = True
         
     c1, c2 = st.columns(2)
@@ -203,19 +193,28 @@ with st.sidebar:
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
             st.rerun()
 
-    # --- HISTORIA ---
+    # --- HISTORIA (NOWY WYGLĄD) ---
     st.divider()
     st.subheader("🗄️ Historia")
     if len(st.session_state.history) > 0:
         for i, item in enumerate(st.session_state.history):
-            with st.container():
-                st.markdown(f"**{item.get('title', 'Bez tytułu')}**")
-                chars_display = item.get('chars', 0)
-                st.caption(f"{item['type']} | {item['time']} | {chars_display} zn.")
-                if st.button("📂 Wczytaj", key=f"rest_{i}_{item['time']}"):
-                    st.session_state.artykul = item['content']
-                    st.rerun()
-                st.markdown("---")
+            # Tytuł jako przycisk (zamiast linku, bo w Streamlit przyciski robią akcje)
+            # use_container_width=True sprawia, że wygląda jak kafelek
+            title_label = item.get('title', 'Bez tytułu')
+            btn_key = f"hist_btn_{i}_{item['time']}"
+            
+            # Przycisk pełniący rolę linku
+            if st.button(title_label, key=btn_key, use_container_width=True):
+                st.session_state.artykul = item['content']
+                st.rerun()
+            
+            # Informacje pod przyciskiem (nieklikalne)
+            chars_display = item.get('chars', 0)
+            st.caption(f"{item['type']} | {item['time']} | {chars_display} zn.")
+            
+            # Separator wizualny
+            st.markdown("<hr style='margin: 5px 0; opacity: 0.3;'>", unsafe_allow_html=True)
+
         if st.button("🗑️ Usuń wszystko"):
             st.session_state.history = []
             save_history_to_disk([])
@@ -271,10 +270,8 @@ else:
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
     content_payload = [manifest]
-    
     if context_data:
         content_payload.append(f"DODATKOWY KONTEKST:\n{context_data}")
-        
     if source_content: 
         content_payload.append(f"GŁÓWNY MATERIAŁ ŹRÓDŁOWY:\n{source_content}")
     
@@ -287,7 +284,6 @@ if st.button("🚀 Generuj Materiał"):
                 audio_file = genai.get_file(audio_file.name)
             content_payload.append(audio_file)
 
-    # Word Proxy & Separator Check
     length_enforcer = f"""
     *** INSTRUKCJA PRIORYTETOWA ***
     1. Koniecznie wstaw separator: ### {("WYWIAD" if typ_tekstu == "Wywiad" else "ARTYKUŁ")} po sekcji propozycji.

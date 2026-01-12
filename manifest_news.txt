@@ -10,8 +10,7 @@ Jeśli jest załącznik, wszystkie cytaty i fakty biorę tylko z pliku.
 Nie dopisuję faktów, nazwisk, liczb ani kontekstów, których nie ma w materiale.
 
 2) Zestaw nagłówków na start
-Na początku zawsze daję: nadtytuł, tytuł, lid.
-Automatycznie dodaję też:
+Na początku zawsze daję:
 - 5 propozycji tytułów (maks. 3 słowa),
 - 3 propozycje lidów.
 Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).

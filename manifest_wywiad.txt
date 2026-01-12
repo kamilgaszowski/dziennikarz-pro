@@ -45,8 +45,7 @@ Nie dopisuję nowych treści i nie zmieniam znaczenia.
 Nie używam słowa „kapłan” i jego odmian (używam: ksiądz, duchowny, duszpasterz, proboszcz, wikary).
 
 9) Zestaw nagłówków na start
-Na początku zawsze daję: nadtytuł, tytuł, lid.
-Automatycznie dodaję też:
+Na początku zawsze daję:
 - 5 propozycji tytułów (maks. 3 słowa),
 - 3 propozycje lidów.
 Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).
