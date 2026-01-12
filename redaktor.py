@@ -16,7 +16,7 @@ try:
 except Exception as e:
     st.error(f"Błąd API Google: {e}")
 
-# --- OPENAI (Wersja 5.2 placeholder) ---
+# --- OPENAI ---
 try:
     openai_client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     HAS_OPENAI = True
@@ -39,81 +39,135 @@ try:
 except ImportError:
     HAS_WEB_LIBS = False
 
-# --- UI CONFIG (BEZ IKONY) ---
+# --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
+# --- CSS (MODERN MINIMALIST STYLE) ---
+st.markdown("""
+<style>
+    /* 1. TYPOGRAFIA NAGŁÓWKA */
+    h1 {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-weight: 200 !important;
+        letter-spacing: -1px;
+        margin-bottom: 0px !important;
+        padding-bottom: 0px !important;
+        color: #e0e0e0;
+    }
+    .version-text {
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: #666;
+        margin-top: -10px;
+        margin-bottom: 30px;
+    }
+
+    /* 2. STYLIZACJA FILE UPLOADER (MNIEJSZY) */
+    [data-testid='stFileUploader'] section {
+        padding: 15px !important; /* Mniejszy padding wewnątrz */
+        min-height: 0px !important;
+        background-color: #1a1c24; /* Ciemne tło */
+        border: 1px dashed #41444e;
+    }
+    [data-testid='stFileUploader'] section:hover {
+        border-color: #777;
+    }
+    /* Ukrycie niektórych domyślnych tekstów uploadera, żeby był czystszy */
+    [data-testid='stFileUploader'] .st-emotion-cache-1ae8axi {
+        font-size: 14px;
+    }
+
+    /* 3. STYLIZACJA PRZYCISKU GENERUJ (BEZ CZERWIENI) */
+    /* Nadpisujemy domyślny styl przycisku */
+    div.stButton > button {
+        background-color: #2b2d35; /* Ciemnoszary, neutralny */
+        color: #ffffff;
+        border: 1px solid #41444e;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        padding: 0.4rem 1.2rem;
+        transition: all 0.2s ease-in-out;
+        box-shadow: none !important;
+    }
+    
+    div.stButton > button:hover {
+        background-color: #ffffff; /* Biały po najechaniu - wysoki kontrast */
+        color: #000000;
+        border-color: #ffffff;
+        transform: translateY(-1px);
+    }
+    
+    div.stButton > button:active {
+        transform: translateY(1px);
+    }
+
+    /* 4. HISTORIA I TEXTAREA */
+    div[data-testid="stCodeBlock"] {
+        border: 1px solid #333;
+        background-color: #0e1117;
+    }
+    
+    /* Ukrycie przycisku deploy */
+    .stDeployButton {display:none;}
+    
+    /* Sidebar buttons alignment */
+    div[data-testid="stSidebar"] button { text-align: left; }
+</style>
+""", unsafe_allow_html=True)
+
 # --- FUNKCJE POMOCNICZE ---
+# (Tutaj bez zmian w logice, tylko kod)
 
 def call_openai_gpt5(system_prompt, user_content):
-    if not HAS_OPENAI:
-        return "BŁĄD: Brak klucza OPENAI_API_KEY w secrets."
+    if not HAS_OPENAI: return "BŁĄD: Brak klucza OPENAI."
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-5.2", # Placeholder
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ],
+            model="gpt-5.2",
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}],
             temperature=0.7
         )
         return response.choices[0].message.content
-    except Exception as e:
-        return f"Błąd OpenAI (GPT-5.2): {str(e)}"
+    except Exception as e: return f"Błąd OpenAI: {str(e)}"
 
 def load_manifest_from_file(filename, target_chars):
     if os.path.exists(filename):
         try:
             with open(filename, "r", encoding="utf-8") as f:
-                content = f.read()
-                return content.replace("{target_chars}", str(target_chars))
-        except Exception as e:
-            return f"BŁĄD ODCZYTU PLIKU MANIFESTU {filename}: {e}"
-    else:
-        return f"BRAK PLIKU MANIFESTU: {filename}. Wgraj go do folderu aplikacji."
+                return f.read().replace("{target_chars}", str(target_chars))
+        except Exception as e: return f"BŁĄD PLIKU: {e}"
+    else: return f"BRAK PLIKU: {filename}"
 
 def extract_urls(text):
-    url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
-    return re.findall(url_pattern, text)
+    return re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', text)
 
 def fetch_url_content(url):
     if not HAS_WEB_LIBS: return ""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        for script in soup(["script", "style", "nav", "footer"]):
-            script.decompose()
-        text = soup.get_text(separator='\n')
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for s in soup(["script", "style", "nav", "footer"]): s.decompose()
+        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
         return "\n".join(lines)[:8000]
     except: return ""
 
 def count_body_chars_only(text):
     if not text: return 0
     clean_text = text.replace("\r", "")
-    separators = ["### ARTYKUŁ", "### WYWIAD", "### TREŚĆ"]
-    for sep in separators:
+    for sep in ["### ARTYKUŁ", "### WYWIAD", "### TREŚĆ"]:
         if sep in clean_text:
             parts = clean_text.split(sep, 1)
-            if len(parts) > 1:
-                content_part = parts[1]
-                return len(content_part.replace("\n", ""))
-    lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
-    if len(lines) > 10:
-        return int(len(clean_text.replace("\n", "")) * 0.8)
+            if len(parts) > 1: return len(parts[1].replace("\n", ""))
+    lines = [l.strip() for l in clean_text.split('\n') if l.strip()]
+    if len(lines) > 10: return int(len(clean_text.replace("\n", "")) * 0.8)
     return len(clean_text.replace("\n", ""))
 
 def read_text_file(uploaded_file):
     try:
-        if uploaded_file.name.endswith('.txt'):
-            return uploaded_file.read().decode("utf-8")
-        elif uploaded_file.name.endswith('.docx') and HAS_LIBS:
-            doc = Document(uploaded_file)
-            return "\n".join([para.text for para in doc.paragraphs])
-        elif uploaded_file.name.endswith('.pdf') and HAS_LIBS:
-            pdf_reader = PyPDF2.PdfReader(uploaded_file)
-            return "\n".join([page.extract_text() for page in pdf_reader.pages])
+        if uploaded_file.name.endswith('.txt'): return uploaded_file.read().decode("utf-8")
+        elif uploaded_file.name.endswith('.docx') and HAS_LIBS: return "\n".join([p.text for p in Document(uploaded_file).paragraphs])
+        elif uploaded_file.name.endswith('.pdf') and HAS_LIBS: return "\n".join([p.extract_text() for p in PyPDF2.PdfReader(uploaded_file).pages])
     except: return ""
     return ""
 
@@ -121,10 +175,9 @@ def read_text_file(uploaded_file):
 HISTORY_FILE = "historia_redaktora.json"
 
 def extract_title_from_text(text):
-    lines = [line.strip() for line in text.split('\n') if line.strip()]
-    for line in lines[:15]:
-        if line.lower().startswith("tytuł:") or line.lower().startswith("tytuł"):
-            return line.split(":", 1)[-1].strip().replace("*", "")
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    for l in lines[:15]:
+        if l.lower().startswith("tytuł"): return l.split(":", 1)[-1].strip().replace("*", "")
     if len(lines) >= 2: return lines[1].replace("#", "").replace("*", "").strip()
     return "Bez tytułu"
 
@@ -134,29 +187,22 @@ def load_history_from_disk():
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 for item in data:
-                    if "chars" not in item:
-                        item["chars"] = count_body_chars_only(item["content"])
+                    if "chars" not in item: item["chars"] = count_body_chars_only(item["content"])
                 return data
         except: return []
     return []
 
 def save_history_to_disk(history_list):
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history_list, f, ensure_ascii=False, indent=4)
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f: json.dump(history_list, f, ensure_ascii=False, indent=4)
 
-if "history" not in st.session_state:
-    st.session_state.history = load_history_from_disk()
+if "history" not in st.session_state: st.session_state.history = load_history_from_disk()
 
 def add_to_history(text, type_label, model_name="AI"):
     timestamp = datetime.now().strftime("%d-%m %H:%M")
-    entry = {
-        "time": timestamp,
-        "type": f"{type_label} ({model_name})",
-        "content": text,
-        "chars": count_body_chars_only(text),
-        "title": extract_title_from_text(text)
-    }
-    st.session_state.history.insert(0, entry)
+    st.session_state.history.insert(0, {
+        "time": timestamp, "type": f"{type_label} ({model_name})", "content": text,
+        "chars": count_body_chars_only(text), "title": extract_title_from_text(text)
+    })
     save_history_to_disk(st.session_state.history)
 
 def delete_history_item(index):
@@ -168,231 +214,164 @@ def clear_all_history():
     st.session_state.history = []
     save_history_to_disk([])
 
-# --- UI: STYLE I NAGŁÓWEK ---
-st.markdown("""
-<style>
-    h1 { margin-bottom: 0px !important; padding-bottom: 0px !important; }
-    .version-text { font-size: 14px; color: #666; margin-top: -15px; margin-bottom: 20px; font-family: monospace; }
-    div[data-testid="stCodeBlock"] {
-        max-height: 75vh !important; 
-        overflow-y: auto !important;
-        border: 1px solid #41444e;
-        border-radius: 8px;
-        background-color: #0e1117;
-    }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar { width: 12px; }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar-track { background: #0e1117; }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb { background-color: #262730; border-radius: 10px; border: 2px solid #0e1117; }
-    .stDeployButton {display:none;}
-    div[data-testid="stSidebar"] button { text-align: left; }
-</style>
-""", unsafe_allow_html=True)
-
+# --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.1</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.2</p>", unsafe_allow_html=True)
 
-if not HAS_WEB_LIBS:
-    st.warning("Brak bibliotek requests/bs4. Linki nie będą działać.")
+if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
-# --- PANEL BOCZNY (CLEAN) ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.header("Ustawienia") # Bez ikony
-    
+    st.header("Ustawienia")
     model_choice = st.radio("Silnik AI:", ["Gemini 3 Pro", "GPT-5.2 (OpenAI)"])
-    if model_choice == "GPT-5.2 (OpenAI)" and not HAS_OPENAI:
-        st.error("Brak klucza OpenAI w secrets!")
+    if model_choice == "GPT-5.2 (OpenAI)" and not HAS_OPENAI: st.error("Brak klucza OpenAI.")
     
     st.divider()
     typ_tekstu = st.radio("Rodzaj:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (treść):", 500, 15000, value=3500, step=500)
     target_words = int(target_chars / 7)
-    st.caption(f"Cel: ~{target_words} słów treści.")
+    st.caption(f"Cel: ~{target_words} słów.")
     
-    # --- STATUS ---
     st.divider()
-    st.markdown("### Status") # Bez ikony
-    
+    st.markdown("### Status")
     current_text = st.session_state.get("artykul", "")
     
     if current_text:
-        netto_body = count_body_chars_only(current_text)
-        roznica = netto_body - target_chars
-        delta_color = "normal" if abs(roznica) < 300 else "inverse"
-        st.metric("Treść (netto)", value=netto_body, delta=f"{roznica} vs cel", delta_color=delta_color)
-        btn_disabled = False
+        netto = count_body_chars_only(current_text)
+        diff = netto - target_chars
+        st.metric("Treść (netto)", value=netto, delta=f"{diff} vs cel", delta_color="inverse")
+        btn_dis = False
     else:
-        st.metric("Treść (netto)", value=0, delta="oczekiwanie")
-        btn_disabled = True
+        st.metric("Treść (netto)", value=0, delta="...")
+        btn_dis = True
         
     c1, c2 = st.columns(2)
-    
-    if c1.button("Skróć", disabled=btn_disabled, use_container_width=True): # Bez ikony
-        with st.spinner(f"Skracam ({model_choice})..."):
-            prompt_short = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ (tę pod nagłówkiem ###) do ok. {target_chars} znaków. Zachowaj strukturę. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{current_text}"
-            
-            if model_choice == "GPT-5.2 (OpenAI)" and HAS_OPENAI:
-                res_text = call_openai_gpt5(system_prompt="Jesteś redaktorem.", user_content=prompt_short)
-            else:
-                res = gemini_model.generate_content(prompt_short)
-                res_text = res.text
-                
-            st.session_state.artykul = res_text
-            add_to_history(res_text, f"{typ_tekstu} (Skrót)", model_name=model_choice)
+    if c1.button("Skróć", disabled=btn_dis, use_container_width=True):
+        with st.spinner("Skracam..."):
+            prompt = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ (pod ###) do {target_chars} znaków. Zachowaj strukturę. Usuń mniej ważne. ZAKAZ 'kapłan'.\n\n{current_text}"
+            res = call_openai_gpt5("Redaktor", prompt) if model_choice.startswith("GPT") and HAS_OPENAI else gemini_model.generate_content(prompt).text
+            st.session_state.artykul = res
+            add_to_history(res, f"{typ_tekstu} (Skrót)", model_choice)
             st.rerun()
-            
-    if c2.button("Wydłuż", disabled=btn_disabled, use_container_width=True): # Bez ikony
-        with st.spinner(f"Rozwijam ({model_choice})..."):
-            prompt_long = f"Wydłuż TREŚĆ WŁAŚCIWĄ (tę pod nagłówkiem ###) do ok. {target_chars} znaków. Zachowaj separator. ZAKAZ cudzysłowów.\n\n{current_text}"
-            
-            if model_choice == "GPT-5.2 (OpenAI)" and HAS_OPENAI:
-                res_text = call_openai_gpt5(system_prompt="Jesteś redaktorem.", user_content=prompt_long)
-            else:
-                res = gemini_model.generate_content(prompt_long)
-                res_text = res.text
-                
-            st.session_state.artykul = res_text
-            add_to_history(res_text, f"{typ_tekstu} (Długi)", model_name=model_choice)
+    if c2.button("Wydłuż", disabled=btn_dis, use_container_width=True):
+        with st.spinner("Wydłużam..."):
+            prompt = f"ZADANIE: Wydłuż TREŚĆ WŁAŚCIWĄ (pod ###) do {target_chars} znaków. ZAKAZ cudzysłowów.\n\n{current_text}"
+            res = call_openai_gpt5("Redaktor", prompt) if model_choice.startswith("GPT") and HAS_OPENAI else gemini_model.generate_content(prompt).text
+            st.session_state.artykul = res
+            add_to_history(res, f"{typ_tekstu} (Długi)", model_choice)
             st.rerun()
 
-    # --- HISTORIA ---
     st.divider()
-    st.subheader("Historia") # Bez ikony
-    
-    if len(st.session_state.history) > 0:
+    st.subheader("Historia")
+    if st.session_state.history:
         for i, item in enumerate(st.session_state.history):
-            col_load, col_del = st.columns([4, 1])
-            with col_load:
-                title_label = item.get('title', 'Bez tytułu')
-                if st.button(title_label, key=f"load_{i}_{item['time']}", use_container_width=True):
+            cl, cd = st.columns([4, 1])
+            with cl: 
+                if st.button(item.get('title','Bez tytułu'), key=f"l{i}", use_container_width=True):
                     st.session_state.artykul = item['content']
                     st.rerun()
-            with col_del:
-                # Zamiana ikony "❌" na tekst "X" lub "Usuń" (tutaj "X" dla oszczędności miejsca)
-                st.button("X", key=f"del_{i}_{item['time']}", on_click=delete_history_item, args=(i,))
-            
-            chars_display = item.get('chars', 0)
-            type_display = item.get('type', 'AI')
-            st.caption(f"{type_display} | {item['time']} | {chars_display} zn.")
-            st.markdown("<hr style='margin: 5px 0; opacity: 0.3;'>", unsafe_allow_html=True)
+            with cd: 
+                st.button("X", key=f"d{i}", on_click=delete_history_item, args=(i,))
+            st.caption(f"{item.get('type','AI')} | {item['time']} | {item.get('chars',0)} zn.")
+            st.markdown("<hr style='margin: 5px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+        st.button("Wyczyść wszystko", on_click=clear_all_history)
+    else: st.caption("Pusto.")
 
-        # Zamiana ikony "🗑️" na tekst
-        st.button("Wyczyść wszystko", type="primary", on_click=clear_all_history)
-    else:
-        st.caption("Pusto.")
+# --- GŁÓWNY INTERFEJS (MINIMALIST) ---
 
-# --- WEJŚCIE DANYCH (UNIFIED, CLEAN) ---
-col_main, col_notes = st.columns([3, 2])
+# Układ: 2 kolumny na input, ale inputy w jednej linii wizualnej
+col_input, col_meta = st.columns([3, 2])
 
-audio_file_to_process = None
-doc_files_to_process = []
+audio_to_proc = None
+docs_to_proc = []
 
-with col_main:
-    # Jeden czysty uploader
-    uploaded_files = st.file_uploader(
-        "Wgraj materiały (Audio, DOCX, PDF, TXT):", 
-        type=['txt', 'pdf', 'docx', 'mp3', 'wav', 'm4a'],
-        accept_multiple_files=True
-    )
-
-    if uploaded_files:
-        for f in uploaded_files:
-            if f.name.lower().endswith(('.mp3', '.wav', '.m4a')):
-                audio_file_to_process = f
-            else:
-                doc_files_to_process.append(f)
+with col_input:
+    # Uploader (Teraz mniejszy dzięki CSS)
+    uploaded = st.file_uploader("Materiały (Audio, Dokumenty):", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True)
+    if uploaded:
+        for f in uploaded:
+            if f.name.endswith(('.mp3','.wav','.m4a')): audio_to_proc = f
+            else: docs_to_proc.append(f)
         
-        info_str = []
-        if audio_file_to_process: info_str.append(f"Audio: {audio_file_to_process.name}")
-        if doc_files_to_process: info_str.append(f"Dokumenty: {len(doc_files_to_process)} szt.")
-        if info_str: st.caption(" | ".join(info_str))
-            
-        if audio_file_to_process and model_choice == "GPT-5.2 (OpenAI)":
-            st.warning("Uwaga: Wybrano GPT-5.2, ale wgrano Audio. Zostanie użyty Gemini 3 Pro.")
+        # Wyświetlamy małe podsumowanie co wgrano
+        info = []
+        if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
+        if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
+        if info: st.caption(" | ".join(info))
 
-with col_notes:
-    pasted_text = st.text_area("Notatki i Linki:", height=150, help="Wklej tu linki lub instrukcje.") # Bez ikony
-
-# --- PRZETWARZANIE ---
-context_data = ""
-if pasted_text:
-    urls = extract_urls(pasted_text)
-    if urls:
-        with col_notes:
-            st.info(f"Skanuję {len(urls)} linków...") # Standardowe info Streamlit ma ikonę "i", tego nie zmienimy łatwo bez CSS hacków
-        context_data += "--- TREŚĆ Z LINKÓW ---\n"
-        for url in urls:
-            content = fetch_url_content(url)
-            context_data += f"ŹRÓDŁO: {url}\n{content}\n\n"
-    context_data += f"--- NOTATKI UŻYTKOWNIKA ---\n{pasted_text}\n"
-
-source_content = ""
-if doc_files_to_process:
-    for f in doc_files_to_process:
-        source_content += f"\n\n--- PLIK: {f.name} ---\n" + read_text_file(f)
-
-# --- ŁADOWANIE MANIFESTÓW ---
-if typ_tekstu == "Wywiad":
-    manifest = load_manifest_from_file("manifest_wywiad.txt", target_chars)
-else:
-    manifest = load_manifest_from_file("manifest_news.txt", target_chars)
-
-# --- GŁÓWNA LOGIKA GENEROWANIA ---
-if st.button("Generuj materiał", use_container_width=True, type="primary"): # Bez ikony
+with col_meta:
+    # Notatki
+    notes = st.text_area("Kontekst / Linki:", height=100, placeholder="Wklej linki lub dodatkowe uwagi...")
     
-    length_enforcer = f"""
+    # PRZYCISK GENERUJ - TERAZ PO PRAWEJ STRONIE, MNIEJSZY
+    # Używamy kolumn wewnątrz kolumny, żeby wyrównać go do prawej
+    _, btn_col = st.columns([1, 1])
+    with btn_col:
+        start_gen = st.button("Generuj materiał", use_container_width=True)
+
+# --- LOGIKA GENEROWANIA ---
+if start_gen:
+    
+    # 1. Przygotowanie danych
+    ctx = ""
+    if notes:
+        urls = extract_urls(notes)
+        if urls:
+            with col_meta: st.info(f"Skanuję {len(urls)} linków...")
+            ctx += "--- WEB ---\n" + "\n".join([f"{u}\n{fetch_url_content(u)}" for u in urls])
+        ctx += f"\n--- INFO ---\n{notes}"
+        
+    src = ""
+    if docs_to_proc:
+        src = "\n".join([f"\n--- {f.name} ---\n{read_text_file(f)}" for f in docs_to_proc])
+
+    manifest_file = "manifest_wywiad.txt" if typ_tekstu == "Wywiad" else "manifest_news.txt"
+    manifest = load_manifest_from_file(manifest_file, target_chars)
+    
+    instruction = f"""
     *** INSTRUKCJA PRIORYTETOWA ***
-    1. Koniecznie wstaw separator: ### {("WYWIAD" if typ_tekstu == "Wywiad" else "ARTYKUŁ")} po sekcji propozycji.
-    2. Tekst WŁAŚCIWY (pod separatorem) ma mieć ok. {target_words} słów.
-    Jeśli masz za dużo materiału -> USUŃ mniej ważne wątki.
+    1. Wstaw separator: ### {("WYWIAD" if typ_tekstu == "Wywiad" else "ARTYKUŁ")} po nagłówkach.
+    2. Treść pod separatorem ma mieć ok. {target_words} słów.
     """
-    
-    # SCENARIUSZ A: GPT-5.2 (TYLKO TEKST)
-    if model_choice == "GPT-5.2 (OpenAI)" and HAS_OPENAI and not audio_file_to_process:
-        with st.spinner("Generowanie (GPT-5.2)..."):
-            full_user_content = ""
-            if context_data: full_user_content += f"DODATKOWY KONTEKST:\n{context_data}\n\n"
-            if source_content: full_user_content += f"GŁÓWNY MATERIAŁ:\n{source_content}\n\n"
-            full_user_content += length_enforcer
 
-            if not source_content:
-                st.error("Brak materiału źródłowego!")
+    # 2. Wykonanie
+    with st.spinner("Przetwarzanie..."):
+        try:
+            if not src and not audio_to_proc:
+                st.error("Brak materiałów.")
             else:
-                res_text = call_openai_gpt5(system_prompt=manifest, user_content=full_user_content)
-                st.session_state.artykul = res_text
-                add_to_history(res_text, typ_tekstu, model_name="GPT-5.2")
-                st.rerun()
-
-    # SCENARIUSZ B: GEMINI 3 PRO (Domyślny + Audio)
-    else:
-        content_payload = [manifest]
-        if context_data: content_payload.append(f"DODATKOWY KONTEKST:\n{context_data}")
-        if source_content: content_payload.append(f"GŁÓWNY MATERIAŁ:\n{source_content}")
-        content_payload.append(length_enforcer)
-        
-        if audio_file_to_process:
-            with st.spinner("Przesyłam audio do Gemini 3..."):
-                with open("temp.mp3", "wb") as f: f.write(audio_file_to_process.getbuffer())
-                audio_file = genai.upload_file(path="temp.mp3")
-                while audio_file.state.name == "PROCESSING": 
-                    time.sleep(2)
-                    audio_file = genai.get_file(audio_file.name)
-                content_payload.append(audio_file)
-
-        with st.spinner(f"Generowanie (Gemini 3)..."):
-            try:
-                if not source_content and not audio_file_to_process:
-                    st.error("Brak materiału źródłowego!")
-                else:
-                    response = gemini_model.generate_content(content_payload)
-                    st.session_state.artykul = response.text
-                    final_model = "Gemini 3" if model_choice == "Gemini 3 Pro" else "Gemini 3 (Audio)"
-                    add_to_history(response.text, typ_tekstu, model_name=final_model)
+                # GPT
+                if model_choice.startswith("GPT") and HAS_OPENAI and not audio_to_proc:
+                    full_p = f"{manifest}\n\nKONTEKST:\n{ctx}\n\nMATERIAŁ:\n{src}\n\n{instruction}"
+                    res = call_openai_gpt5("Redaktor", full_p)
+                    st.session_state.artykul = res
+                    add_to_history(res, typ_tekstu, "GPT-5.2")
                     st.rerun()
-            except Exception as e: st.error(f"Błąd Gemini: {e}")
+                # GEMINI
+                else:
+                    payload = [manifest]
+                    if ctx: payload.append(f"KONTEKST:\n{ctx}")
+                    if src: payload.append(f"MATERIAŁ:\n{src}")
+                    payload.append(instruction)
+                    
+                    if audio_to_proc:
+                        with open("temp.mp3", "wb") as f: f.write(audio_to_proc.getbuffer())
+                        af = genai.upload_file("temp.mp3")
+                        while af.state.name == "PROCESSING": time.sleep(1); af = genai.get_file(af.name)
+                        payload.append(af)
+                        
+                    res = gemini_model.generate_content(payload).text
+                    st.session_state.artykul = res
+                    model_tag = "Gemini 3" if not (model_choice.startswith("GPT") and audio_to_proc) else "Gemini (Audio)"
+                    add_to_history(res, typ_tekstu, model_tag)
+                    st.rerun()
+        except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI ---
+# --- WYNIK ---
 if "artykul" in st.session_state:
-    tekst = st.session_state.artykul
-    st.subheader("Gotowy artykuł:")
-    st.code(tekst, language="markdown", wrap_lines=True)
-    st.download_button("Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt") # Bez ikony
+    st.markdown("---") # Subtelna linia oddzielająca
+    st.markdown("### Wynik")
+    st.code(st.session_state.artykul, language="markdown", wrap_lines=True)
+    
+    # Przycisk pobierania - też minimalistyczny (bez use_container_width)
+    st.download_button("Pobierz .txt", data=st.session_state.artykul, file_name=f"{typ_tekstu.lower()}.txt")
