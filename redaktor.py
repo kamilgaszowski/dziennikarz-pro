@@ -63,16 +63,9 @@ st.markdown("""
     }
 
     /* 2. ZMIANA TEKSTÓW W UPLOADERZE (CSS HACK) */
-    /* Ukrywamy domyślny tekst "Drag and drop files here" */
-    [data-testid='stFileUploader'] section > div:first-child span {
-        display: none;
-    }
-    /* Ukrywamy domyślny tekst o limicie (Limit 200MB) */
-    [data-testid='stFileUploader'] section > div:first-child small {
-        display: none;
-    }
+    [data-testid='stFileUploader'] section > div:first-child span { display: none; }
+    [data-testid='stFileUploader'] section > div:first-child small { display: none; }
     
-    /* Wstawiamy własny tekst "Importuj" */
     [data-testid='stFileUploader'] section > div:first-child::before {
         content: "Importuj";
         display: block;
@@ -83,7 +76,6 @@ st.markdown("""
         margin-bottom: 5px;
     }
     
-    /* Wstawiamy własny tekst o formatach */
     [data-testid='stFileUploader'] section > div:first-child::after {
         content: "Limit 200MB • TXT, PDF, DOCX, MP3, WAV, M4A";
         display: block;
@@ -92,7 +84,6 @@ st.markdown("""
         color: #666;
     }
 
-    /* Stylizacja samego pudełka uploadera */
     [data-testid='stFileUploader'] section {
         padding: 20px 10px !important;
         background-color: #16181e; 
@@ -103,7 +94,6 @@ st.markdown("""
         border-color: #888;
         background-color: #1c1f26;
     }
-    /* Ukrycie ikony chmury */
     [data-testid='stFileUploader'] svg { display: none; }
 
     /* 3. PRZYCISK GENERUJ */
@@ -114,7 +104,7 @@ st.markdown("""
         border-radius: 6px;
         font-size: 14px;
         padding: 0.5rem 1rem;
-        width: 100%; /* Wymuszamy pełną szerokość w kolumnie */
+        width: 100%;
     }
     div.stButton > button:hover {
         background-color: #ffffff;
@@ -129,10 +119,19 @@ st.markdown("""
     }
     .stDeployButton {display:none;}
     div[data-testid="stSidebar"] button { text-align: left; }
+    
+    /* 5. METRYKA W SIDEBARZE */
+    [data-testid="stMetric"] {
+        background-color: #1a1c24;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid #333;
+        margin-top: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- FUNKCJE POMOCNICZE (BEZ ZMIAN) ---
+# --- FUNKCJE POMOCNICZE ---
 def call_openai_gpt5(system_prompt, user_content):
     if not HAS_OPENAI: return "BŁĄD: Brak klucza OPENAI."
     try:
@@ -230,11 +229,11 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.4</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.5</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
-# --- SIDEBAR ---
+# --- SIDEBAR (ZINTEGROWANY STATUS) ---
 with st.sidebar:
     st.header("Ustawienia")
     model_choice = st.radio("Silnik AI:", ["Gemini 3 Pro", "GPT-5.2 (OpenAI)"])
@@ -242,39 +241,27 @@ with st.sidebar:
     
     st.divider()
     typ_tekstu = st.radio("Rodzaj:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
+    
+    # SUWAK I STATUS W JEDNYM BLOKU
     target_chars = st.slider("Cel znaków (treść):", 500, 15000, value=3500, step=500)
     target_words = int(target_chars / 7)
     st.caption(f"Cel: ~{target_words} słów.")
-    
-    st.divider()
-    st.markdown("### Status")
+
+    # TU JEST NOWY, CZYSTY STATUS POD SUWAKIEM
     current_text = st.session_state.get("artykul", "")
     
     if current_text:
         netto = count_body_chars_only(current_text)
         diff = netto - target_chars
-        st.metric("Treść (netto)", value=netto, delta=f"{diff} vs cel", delta_color="inverse")
-        btn_dis = False
-    else:
-        st.metric("Treść (netto)", value=0, delta="...")
-        btn_dis = True
+        # Koloryzacja: czerwony jeśli duża różnica (>300 zn), normalny jeśli ok
+        delta_color = "normal" if abs(diff) < 300 else "inverse"
         
-    c1, c2 = st.columns(2)
-    if c1.button("Skróć", disabled=btn_dis, use_container_width=True):
-        with st.spinner("Skracam..."):
-            prompt = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ (pod ###) do {target_chars} znaków. Zachowaj strukturę. Usuń mniej ważne. ZAKAZ 'kapłan'.\n\n{current_text}"
-            res = call_openai_gpt5("Redaktor", prompt) if model_choice.startswith("GPT") and HAS_OPENAI else gemini_model.generate_content(prompt).text
-            st.session_state.artykul = res
-            add_to_history(res, f"{typ_tekstu} (Skrót)", model_choice)
-            st.rerun()
-    if c2.button("Wydłuż", disabled=btn_dis, use_container_width=True):
-        with st.spinner("Wydłużam..."):
-            prompt = f"ZADANIE: Wydłuż TREŚĆ WŁAŚCIWĄ (pod ###) do {target_chars} znaków. ZAKAZ cudzysłowów.\n\n{current_text}"
-            res = call_openai_gpt5("Redaktor", prompt) if model_choice.startswith("GPT") and HAS_OPENAI else gemini_model.generate_content(prompt).text
-            st.session_state.artykul = res
-            add_to_history(res, f"{typ_tekstu} (Długi)", model_choice)
-            st.rerun()
+        # Wyświetlanie metryki
+        st.metric(label="Obecna długość (netto):", value=f"{netto} zn.", delta=f"{diff} vs cel", delta_color=delta_color)
+    else:
+        st.metric(label="Obecna długość (netto):", value="0 zn.", delta="oczekiwanie")
 
+    # HISTORIA
     st.divider()
     st.subheader("Historia")
     if st.session_state.history:
@@ -291,13 +278,11 @@ with st.sidebar:
         st.button("Wyczyść wszystko", on_click=clear_all_history)
     else: st.caption("Pusto.")
 
-# --- GŁÓWNY INTERFEJS (V17.4 - WĄSKA LEWA STRONA) ---
+# --- GŁÓWNY INTERFEJS ---
 
-# 1. NOTATKI (Pełna szerokość na górze)
 pasted_text = st.text_area("Notatki / Kontekst:", height=100, placeholder="Wklej notatki lub linki...", label_visibility="visible")
 
-# 2. SEKCJA INPUTU I GENEROWANIA (GRID: WĄSKI | SZEROKI PUSTY)
-col_left, col_right = st.columns([1, 3]) # Lewa kolumna zajmuje 1/4 (lub 1/3 w zależności od ekranu) szerokości
+col_left, col_right = st.columns([1, 3]) 
 
 audio_to_proc = None
 docs_to_proc = []
@@ -316,11 +301,10 @@ with col_left:
         if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
         if info: st.caption(" | ".join(info))
 
-    # 2.2 PRZYCISK GENERUJ (Ta sama szerokość co uploader, bo w tej samej kolumnie)
-    st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True) # Mały odstęp
+    # 2.2 PRZYCISK GENERUJ
+    st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True)
     start_gen = st.button("Generuj", use_container_width=True)
 
-# Prawa kolumna pozostaje pusta lub na przyszłe funkcje
 with col_right:
     pass 
 
