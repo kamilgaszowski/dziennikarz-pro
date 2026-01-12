@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 
 # 1. KONFIGURACJA API
-# --- GEMINI (Wersja 3 Pro) ---
+# --- GEMINI ---
 try:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     gemini_model = genai.GenerativeModel('gemini-3-pro-preview') 
@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (COMPACT & MODERN) ---
+# --- CSS (HARDCORE CUSTOMIZATION) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,42 +62,51 @@ st.markdown("""
         margin-bottom: 20px;
     }
 
-    /* 2. KOMPAKTOWY FILE UPLOADER */
-    /* Zmniejszamy padding i wysokość kontenera uploadera */
-    [data-testid='stFileUploader'] {
-        margin-top: -25px; /* Podciągamy go trochę do góry */
+    /* 2. ZMIANA TEKSTÓW W UPLOADERZE (CSS HACK) */
+    /* Ukrywamy domyślny tekst "Drag and drop files here" */
+    [data-testid='stFileUploader'] section > div:first-child span {
+        display: none;
     }
+    /* Ukrywamy domyślny tekst o limicie (Limit 200MB) */
+    [data-testid='stFileUploader'] section > div:first-child small {
+        display: none;
+    }
+    
+    /* Wstawiamy własny tekst "Importuj" */
+    [data-testid='stFileUploader'] section > div:first-child::before {
+        content: "Importuj";
+        display: block;
+        text-align: center;
+        font-weight: 600;
+        font-size: 16px;
+        color: #e0e0e0;
+        margin-bottom: 5px;
+    }
+    
+    /* Wstawiamy własny tekst o formatach */
+    [data-testid='stFileUploader'] section > div:first-child::after {
+        content: "Limit 200MB • TXT, PDF, DOCX, MP3, WAV, M4A";
+        display: block;
+        text-align: center;
+        font-size: 11px;
+        color: #666;
+    }
+
+    /* Stylizacja samego pudełka uploadera */
     [data-testid='stFileUploader'] section {
-        padding: 10px 15px !important; /* Bardzo mały padding */
-        min-height: 0px !important;
+        padding: 20px 10px !important;
         background-color: #16181e; 
-        border: 1px dashed #333;
+        border: 1px dashed #444;
         border-radius: 6px;
     }
     [data-testid='stFileUploader'] section:hover {
-        border-color: #666;
+        border-color: #888;
         background-color: #1c1f26;
     }
-    /* Ukrywamy ikonę 'cloud upload' żeby zaoszczędzić miejsce */
-    [data-testid='stFileUploader'] svg {
-        display: none;
-    }
-    /* Zmniejszamy tekst instrukcji drag & drop */
-    [data-testid='stFileUploader'] small {
-        display: none; /* Ukrywamy "Limit 200MB..." */
-    }
-    .st-emotion-cache-1ae8axi {
-        margin-bottom: 0px !important;
-    }
+    /* Ukrycie ikony chmury */
+    [data-testid='stFileUploader'] svg { display: none; }
 
-    /* 3. TEXT AREA (NOTATKI) */
-    /* Delikatne ramki dla notatek */
-    [data-testid="stTextArea"] textarea {
-        background-color: #16181e;
-        border: 1px solid #333;
-    }
-
-    /* 4. PRZYCISK GENERUJ */
+    /* 3. PRZYCISK GENERUJ */
     div.stButton > button {
         background-color: #2b2d35;
         color: #ffffff;
@@ -105,17 +114,15 @@ st.markdown("""
         border-radius: 6px;
         font-size: 14px;
         padding: 0.5rem 1rem;
-        transition: all 0.2s;
-        margin-top: 2px; /* Wyrównanie optyczne z uploaderem */
-        height: 48px; /* Wymuszona wysokość, by pasował do uploadera */
+        width: 100%; /* Wymuszamy pełną szerokość w kolumnie */
     }
     div.stButton > button:hover {
         background-color: #ffffff;
         color: #000000;
         border-color: #ffffff;
     }
-    
-    /* 5. HISTORIA */
+
+    /* 4. HISTORIA */
     div[data-testid="stCodeBlock"] {
         border: 1px solid #333;
         background-color: #0e1117;
@@ -125,8 +132,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- FUNKCJE POMOCNICZE ---
-
+# --- FUNKCJE POMOCNICZE (BEZ ZMIAN) ---
 def call_openai_gpt5(system_prompt, user_content):
     if not HAS_OPENAI: return "BŁĄD: Brak klucza OPENAI."
     try:
@@ -224,7 +230,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.3</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.4</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -285,36 +291,38 @@ with st.sidebar:
         st.button("Wyczyść wszystko", on_click=clear_all_history)
     else: st.caption("Pusto.")
 
-# --- GŁÓWNY INTERFEJS (V17.3 LAYOUT) ---
+# --- GŁÓWNY INTERFEJS (V17.4 - WĄSKA LEWA STRONA) ---
 
-# 1. NOTATKI NA GÓRZE (PEŁNA SZEROKOŚĆ)
-pasted_text = st.text_area("Notatki / Kontekst:", height=100, placeholder="Wklej linki, notatki lub dodatkowe instrukcje...", label_visibility="visible")
+# 1. NOTATKI (Pełna szerokość na górze)
+pasted_text = st.text_area("Notatki / Kontekst:", height=100, placeholder="Wklej notatki lub linki...", label_visibility="visible")
 
-# 2. SEKCJA PLIKÓW I GENEROWANIA (DÓŁ)
-col_upload, col_btn = st.columns([5, 1]) # 5:1 proporcja, żeby przycisk był wąski
+# 2. SEKCJA INPUTU I GENEROWANIA (GRID: WĄSKI | SZEROKI PUSTY)
+col_left, col_right = st.columns([1, 3]) # Lewa kolumna zajmuje 1/4 (lub 1/3 w zależności od ekranu) szerokości
 
 audio_to_proc = None
 docs_to_proc = []
 
-with col_upload:
-    # Uploader (jest teraz kompaktowy dzięki CSS wyżej)
-    uploaded = st.file_uploader("Dodaj pliki (Audio, Dokumenty):", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="visible")
+with col_left:
+    # 2.1 UPLOADER (Wąski, ze zmienionym tekstem CSS)
+    uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
     
     if uploaded:
         for f in uploaded:
             if f.name.endswith(('.mp3','.wav','.m4a')): audio_to_proc = f
             else: docs_to_proc.append(f)
         
-        # Małe info co wgrano
         info = []
         if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
         if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
-        # if info: st.caption(" | ".join(info)) # Opcjonalne: ukryłem, bo widać w uploaderze nazwy plików
+        if info: st.caption(" | ".join(info))
 
-with col_btn:
-    # Pusty element dla wyrównania w pionie (jeśli label uploadera jest widoczny)
-    st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
+    # 2.2 PRZYCISK GENERUJ (Ta sama szerokość co uploader, bo w tej samej kolumnie)
+    st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True) # Mały odstęp
     start_gen = st.button("Generuj", use_container_width=True)
+
+# Prawa kolumna pozostaje pusta lub na przyszłe funkcje
+with col_right:
+    pass 
 
 # --- LOGIKA GENEROWANIA ---
 if start_gen:
@@ -324,7 +332,7 @@ if start_gen:
     if pasted_text:
         urls = extract_urls(pasted_text)
         if urls:
-            st.info(f"Skanuję {len(urls)} linków...")
+            st.toast(f"Skanuję {len(urls)} linków...")
             ctx += "--- WEB ---\n" + "\n".join([f"{u}\n{fetch_url_content(u)}" for u in urls])
         ctx += f"\n--- INFO ---\n{pasted_text}"
         
@@ -348,18 +356,15 @@ if start_gen:
             if not src and not audio_to_proc:
                 st.error("Brak materiałów (pliki)!")
             else:
-                # Ostrzeżenie o Audio+GPT
                 if model_choice.startswith("GPT") and audio_to_proc:
                     st.toast("GPT nie obsługuje audio. Przełączam na Gemini.", icon="⚠️")
                 
-                # GPT (Text Only)
                 if model_choice.startswith("GPT") and HAS_OPENAI and not audio_to_proc:
                     full_p = f"{manifest}\n\nKONTEKST:\n{ctx}\n\nMATERIAŁ:\n{src}\n\n{instruction}"
                     res = call_openai_gpt5("Redaktor", full_p)
                     st.session_state.artykul = res
                     add_to_history(res, typ_tekstu, "GPT-5.2")
                     st.rerun()
-                # GEMINI (Text + Audio)
                 else:
                     payload = [manifest]
                     if ctx: payload.append(f"KONTEKST:\n{ctx}")
