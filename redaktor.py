@@ -18,12 +18,9 @@ except ImportError:
     HAS_LIBS = False
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
-st.title("🖋️ Dziennikarz Master PRO v11.5")
+st.title("🖋️ Dziennikarz Master PRO v11.6")
 
-if not HAS_LIBS:
-    st.warning("⚠️ Brak bibliotek DOCX/PDF. Zainstaluj: pip install python-docx pypdf2")
-
-# --- FUNKCJA CZYTANIA PLIKÓW ---
+# --- FUNKCJE POMOCNICZE ---
 def read_file(uploaded_file):
     try:
         if uploaded_file.name.endswith('.txt'):
@@ -38,11 +35,14 @@ def read_file(uploaded_file):
         st.error(f"Błąd pliku {uploaded_file.name}: {e}")
     return ""
 
+def count_net_chars(text):
+    return len(text.replace("\n", "").replace("\r", ""))
+
 # --- PANEL BOCZNY ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
-    target_chars = st.slider("Docelowa liczba znaków (bez enterów):", 500, 15000, value=3500, step=500)
+    target_chars = st.slider("Docelowa liczba znaków (netto):", 500, 15000, value=3500, step=500)
     st.info(f"Tryb: {typ_tekstu} | Cel: {target_chars} znaków")
 
 # --- WEJŚCIE DANYCH ---
@@ -50,74 +50,63 @@ col1, col2 = st.columns(2)
 with col1:
     uploaded_files = st.file_uploader("Dodaj pliki źródłowe:", accept_multiple_files=True)
 with col2:
-    pasted_text = st.text_area("Lub wklej materiały tutaj:", height=150)
+    pasted_text = st.text_area("Wklej materiały tutaj:", height=150)
 
 all_source = pasted_text
 if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- Materiał z: {f.name} ---\n" + read_file(f)
 
-# --- MANIFESTY Z POPRAWIONĄ INSTRUKCJĄ DŁUGOŚCI ---
-strict_length_instruction = f"""
-WAŻNE: Docelowa długość tekstu to równe {target_chars} znaków. 
-Limit ten nie obejmuje znaków nowej linii (enterów). 
-Jeśli materiału źródłowego jest mało, rozwiń wątki zgodnie ze stylem. 
-Jeśli jest za dużo, skracaj bez litości, zachowując esencję. 
-Bądź precyzyjny – AI często pisze za długo, Ty napisz dokładnie tyle, ile wskazano.
-"""
+# --- MANIFESTY ---
+strict_length_instruction = f"WAŻNE: Celuj w {target_chars} znaków netto (bez enterów)."
 
 if typ_tekstu == "Wywiad":
-    manifest = f"""
-    TRYB wywiad. {strict_length_instruction}
-    Jesteś redaktorem. Zredaguj wywiad Q/A. Pracuj wyłącznie na materiale źródłowym.
-    ZAKAZY: Metajęzyk, dwukropki, średniki, separatory, słowo 'kapłan'.
-    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid 1-2 zdania zaczynający się od 'O').
-    KONSTRUKCJA: Forma Q/A (P: ... O: ...). Liczba bloków: 6-12.
-    REDAKCJA: Usuń 'ja' w 99%. Napraw neologizmy (sekcja ZAMIANY na końcu).
-    """
+    manifest = f"TRYB wywiad. {strict_length_instruction} Redaguj wywiad Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów (nadtytuł, tytuł, lid na 'O')."
 else:
-    manifest = f"""
-    TRYB article/news. {strict_length_instruction}
-    Jesteś redaktorem prasowym. Rdzeń: 2/3 treści ze źródła głównego.
-    ZAKAZY: Metajęzyk, słowo 'kapłan' (używaj: ksiądz, duszpasterz, proboszcz).
-    CYTATY: Ramka pauzowa: – Zdanie. Zdanie. Zdanie. Zdanie. – (min. 4 zdania).
-    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid).
-    STRUKTURA: Relacja (3 twarde fakty w 1. akapicie) lub tekst problemowy.
-    ZAKOŃCZENIE: Konkret lub cytat. Brak ogólnych refleksji.
-    """
+    manifest = f"TRYB article/news. {strict_length_instruction} Redaktor prasowy. Rdzeń: 2/3 treści. Cytaty w ramce pauzowej. Nagłówki: 5 zestawów. Zakaz słowa 'kapłan'."
 
-# --- GENEROWANIE ---
+# --- GENEROWANIE GŁÓWNE ---
 if st.button("🚀 Generuj Materiał"):
     if all_source.strip():
-        with st.spinner(f"Generowanie tekstu..."):
+        with st.spinner("Piszę tekst..."):
             try:
-                full_prompt = f"{manifest}\n\nMATERIAŁ ŹRÓDŁOWY:\n{all_source}"
+                full_prompt = f"{manifest}\n\nMATERIAŁ:\n{all_source}"
                 response = model.generate_content(full_prompt)
                 st.session_state.artykul = response.text
             except Exception as e:
                 st.error(f"Błąd API: {e}")
     else:
-        st.error("Proszę dodać materiały źródłowe!")
+        st.error("Brak materiałów źródłowych!")
 
-# --- WYNIKI I NOWY LICZNIK ---
+# --- WYNIKI I KOREKTA ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
-    
-    # NOWA LOGIKA: Liczymy znaki ignorując entery (\n)
-    dlugosc_bez_enterow = len(tekst.replace("\n", ""))
-    roznica = dlugosc_bez_enterow - target_chars
+    netto = count_net_chars(tekst)
+    roznica = netto - target_chars
     
     st.divider()
     
-    # Licznik pokazuje teraz wartość netto (bez enterów)
-    st.metric(
-        label="Liczba znaków (netto - bez enterów)", 
-        value=dlugosc_bez_enterow, 
-        delta=f"{roznica} względem celu", 
-        delta_color="inverse"
-    )
+    col_m1, col_m2 = st.columns([1, 2])
+    with col_m1:
+        st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} względem celu", delta_color="inverse")
+    
+    with col_m2:
+        st.write("### 🛠️ Szybka korekta długości")
+        c1, c2, c3 = st.columns(3)
+        
+        if c1.button("✂️ Skróć o ok. 20%"):
+            with st.spinner("Skracam..."):
+                new_res = model.generate_content(f"Skróć poniższy tekst o około 20%, zachowując jego strukturę i styl. Celuj w ok. {int(netto*0.8)} znaków netto:\n\n{tekst}")
+                st.session_state.artykul = new_res.text
+                st.rerun()
+                
+        if c2.button("➕ Wydłuż o ok. 20%"):
+            with st.spinner("Rozszerzam..."):
+                new_res = model.generate_content(f"Rozszerz poniższy tekst o około 20% (dodaj detale, opisy lub cytaty ze źródła), zachowując strukturę. Celuj w ok. {int(netto*1.2)} znaków netto:\n\n{tekst}")
+                st.session_state.artykul = new_res.text
+                st.rerun()
 
-    st.subheader("Finalny tekst:")
+    st.subheader("Gotowy materiał:")
     st.code(tekst, language="markdown", wrap_lines=True)
     
-    st.download_button(label="💾 Pobierz .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt", mime="text/plain")
+    st.download_button(label="💾 Pobierz .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
