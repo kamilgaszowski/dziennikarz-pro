@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (CLEAN & NARROW UPLOADER) ---
+# --- CSS (LEFT ALIGNED UPLOADER) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,11 +62,11 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER - WĄSKI I CZYSTY (BEZ POLSKICH HACKÓW) */
+    /* 2. UPLOADER - LEWOSTRONNY */
     [data-testid='stFileUploader'] {
         margin-top: 10px;
         margin-bottom: 15px;
-        /* Ograniczenie szerokości i wyśrodkowanie */
+        /* Pudełko wyśrodkowane, ale ograniczone szerokością */
         max-width: 600px; 
         margin-left: auto;
         margin-right: auto;
@@ -78,13 +78,19 @@ st.markdown("""
         background-color: #16181e; 
         border: 1px dashed #333; 
         border-radius: 6px;
-        text-align: center;
+        
+        /* KLUCZOWA ZMIANA: WYRÓWNANIE DO LEWEJ */
+        text-align: left !important;
+        align-items: flex-start !important; 
+        display: flex;
+        flex-direction: column;
     }
+    
     [data-testid='stFileUploader'] section:hover {
         border-color: #666;
         background-color: #1c1f26;
     }
-    /* Ukrycie ikony chmury (opcjonalne, dla czystszego wyglądu) */
+    /* Ukrycie ikony chmury */
     [data-testid='stFileUploader'] svg { display: none; }
     
     /* Usunięcie marginesu pod plikiem */
@@ -223,7 +229,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.14</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.15</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -288,7 +294,7 @@ with st.sidebar:
 
 # --- GŁÓWNY INTERFEJS ---
 
-# 1. IMPORT (Default text + Max-width Constraint)
+# 1. IMPORT (Left Aligned via CSS)
 uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
 
 audio_to_proc = None
@@ -301,13 +307,12 @@ if uploaded:
     if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
     if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
     if info: 
-        # Wyświetlamy info wyśrodkowane pod uploaderem
         st.markdown(f"<div style='text-align: center; color: #888; font-size: 12px; margin-top: -10px;'>{' • '.join(info)}</div>", unsafe_allow_html=True)
 
-# 2. NOTATKA (Full width)
+# 2. NOTATKA
 pasted_text = st.text_area("notatki", height=120, placeholder="Wklej notatki, linki lub kontekst...", label_visibility="collapsed")
 
-# 3. GENERUJ (Full width button)
+# 3. GENERUJ
 start_gen = st.button("Generuj", use_container_width=True, type="primary")
 
 # --- LOGIKA GENEROWANIA ---
