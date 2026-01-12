@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import time
 import io
+import base64
 
 # 1. KONFIGURACJA API
 try:
@@ -20,47 +21,89 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- CSS: MAGICZNY ATRYBUT FIXED/STICKY ---
-# To jest kluczowa zmiana. Wymuszamy na bloku kodu zachowanie "okna".
+# --- CSS: MAGICZNY KOD ODPOWIEDZIALNY ZA "PRZYKLEJENIE" ---
 st.markdown("""
 <style>
-    /* Namierzamy kontener kodu Streamlit */
-    div[data-testid="stCodeBlock"] {
-        /* Ustawiamy maksymalną wysokość na 75% ekranu */
-        max-height: 75vh !important; 
-        
-        /* Dodajemy scrollbar wewnątrz tego okna */
-        overflow-y: auto !important;
-        
-        /* Estetyka ramki */
+    /* Kontener ramki */
+    .custom-container {
         border: 1px solid #41444e;
         border-radius: 8px;
         background-color: #0e1117;
+        margin-top: 15px;
+        overflow: hidden; /* Ukrywamy to, co wystaje */
+        display: flex;
+        flex-direction: column;
+        position: relative;
     }
 
-    /* Opcjonalnie: Stylizacja paska przewijania, żeby był ładny */
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar {
-        width: 12px;
-    }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar-track {
-        background: #0e1117;
-    }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb {
+    /* --- TO JEST KLUCZOWY FRAGMENT --- */
+    .sticky-header {
         background-color: #262730;
-        border-radius: 10px;
-        border: 2px solid #0e1117;
+        padding: 10px 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #41444e;
+        
+        /* WŁAŚCIWOŚCI PRZYKLEJANIA */
+        position: sticky; 
+        top: 0;
+        z-index: 10; 
+    }
+    /* -------------------------------- */
+
+    .header-title {
+        color: #fafafa;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Przycisk kopiowania */
+    .copy-btn {
+        background: transparent;
+        border: 1px solid #565869;
+        color: #d1d5db;
+        cursor: pointer;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .copy-btn:hover {
+        background-color: #40414f;
+        border-color: #fafafa;
+        color: #fff;
+    }
+
+    /* Treść artykułu z przewijaniem */
+    .scrollable-content {
+        padding: 20px;
+        color: #fafafa;
+        font-family: 'Source Code Pro', monospace;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        white-space: pre-wrap; 
+        max-height: 70vh;    /* Maksymalna wysokość okna */
+        overflow-y: auto;    /* Własny pasek przewijania */
     }
     
-    /* Ukrycie zbędnych przycisków Streamlit, zostaje tylko Copy */
-    .stDeployButton {display:none;}
+    /* Estetyka paska przewijania */
+    .scrollable-content::-webkit-scrollbar { width: 10px; }
+    .scrollable-content::-webkit-scrollbar-track { background: #0e1117; }
+    .scrollable-content::-webkit-scrollbar-thumb { background: #31333f; border-radius: 5px; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v13.2")
+st.title("🖋️ Dziennikarz Master PRO v13.3")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
-    # Liczymy znaki bez enterów
     return len(text.replace("\n", "").replace("\r", ""))
 
 def read_text_file(uploaded_file):
@@ -82,7 +125,7 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     st.divider()
-    st.caption("v13.2 | CSS Fixed Scroll")
+    st.caption("v13.3 | Sticky Header & Base64")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -98,7 +141,7 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY (PEŁNE) ---
+# --- MANIFESTY ---
 strict_length = f"CEL: {target_chars} znaków netto (bez enterów)."
 if typ_tekstu == "Wywiad":
     manifest = f"TRYB wywiad. {strict_length} Redaguj Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów (nadtytuł, tytuł, lid na 'O')."
@@ -109,14 +152,11 @@ else:
 if st.button("🚀 Generuj Materiał"):
     content = [manifest]
     if all_source: content.append(f"TEKST:\n{all_source}")
-    
     if uploaded_audio:
         with st.spinner("Przesyłam audio do Gemini 3..."):
             with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
             audio_file = genai.upload_file(path="temp.mp3")
-            while audio_file.state.name == "PROCESSING": 
-                time.sleep(2)
-                audio_file = genai.get_file(audio_file.name)
+            while audio_file.state.name == "PROCESSING": time.sleep(2); audio_file = genai.get_file(audio_file.name)
             content.append(audio_file)
 
     with st.spinner("Generowanie tekstu..."):
@@ -131,7 +171,7 @@ if "artykul" in st.session_state:
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # 1. Pasek narzędzi
+    # 1. Narzędzia (Skracanie/Wydłużanie + Licznik)
     c1, c2, c3 = st.columns([1, 1, 2])
     if c1.button("✂️ Skróć 20%"):
         res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
@@ -144,11 +184,50 @@ if "artykul" in st.session_state:
     with c3:
          st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
 
-    # 2. GŁÓWNE OKNO (Standardowe st.code + CSS Fix)
-    st.subheader("Gotowy Artykuł:")
-    # Dzięki CSS wyżej, to okno będzie miało stałą wysokość i wewnętrzny scroll.
-    # Przycisk kopiowania (ikona w rogu) pozostanie w miejscu.
-    st.code(tekst, language="markdown", wrap_lines=True)
+    # 2. PRZYGOTOWANIE DO HTML (Base64 - naprawia "krzaki" i błędy JS)
+    b64_text = base64.b64encode(tekst.encode('utf-8')).decode('utf-8')
     
-    # 3. Pobieranie
+    # SVG ikonka
+    icon_svg = """<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="14" width="14" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>"""
+
+    # 3. RENDEROWANIE
+    # Używamy klasy .sticky-header zdefiniowanej w CSS na górze
+    html_code = f"""
+    <div class="custom-container">
+        <div class="sticky-header">
+            <div class="header-title">Gotowy Artykuł</div>
+            <button class="copy-btn" onclick="copySafe()">
+                {icon_svg} Kopiuj
+            </button>
+        </div>
+        <div class="scrollable-content">{tekst}</div>
+    </div>
+
+    <script>
+    function copySafe() {{
+        const b64 = "{b64_text}";
+        try {{
+            const bin = window.atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const txt = new TextDecoder('utf-8').decode(bytes);
+            
+            navigator.clipboard.writeText(txt).then(() => {{
+                const btn = document.querySelector('.copy-btn');
+                btn.innerHTML = '✅ Skopiowano!';
+                btn.style.color = '#4caf50';
+                btn.style.borderColor = '#4caf50';
+                setTimeout(() => {{ 
+                    btn.innerHTML = '{icon_svg} Kopiuj'; 
+                    btn.style.color = '#d1d5db';
+                    btn.style.borderColor = '#565869';
+                }}, 2000);
+            }});
+        }} catch (e) {{ console.error(e); }}
+    }}
+    </script>
+    """
+    st.markdown(html_code, unsafe_allow_html=True)
+    
+    # Przycisk pobierania (jako backup)
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
