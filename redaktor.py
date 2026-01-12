@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import time
 import io
-import json
+import html
 
 # 1. KONFIGURACJA API
 try:
@@ -21,86 +21,85 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- CSS: WYGLĄD IDEALNIE JAK W STREAMLIT ---
+# --- CSS: STYLIZACJA (Bezpieczna) ---
 st.markdown("""
 <style>
-    /* Kontener główny - ramka */
-    .st-code-container {
+    /* Kontener edytora */
+    .editor-wrapper {
         border: 1px solid #31333f;
         border-radius: 8px;
         background-color: #0e1117;
-        margin-top: 10px;
+        margin-top: 15px;
         overflow: hidden;
-        position: relative;
         display: flex;
         flex-direction: column;
-        max-height: 75vh; /* Maksymalna wysokość okna */
+        position: relative;
     }
 
-    /* Nagłówek przyklejony (Sticky) */
-    .st-code-header {
+    /* Przyklejony nagłówek */
+    .editor-header {
         background-color: #262730;
-        padding: 8px 12px;
+        padding: 8px 15px;
         display: flex;
         justify-content: flex-end; /* Ikona po prawej */
         align-items: center;
         border-bottom: 1px solid #31333f;
         position: sticky;
         top: 0;
-        z-index: 10;
-        height: 40px;
+        z-index: 100;
+        height: 45px;
     }
 
-    /* Przycisk z ikoną */
-    .copy-button-icon {
+    /* Przycisk kopiowania */
+    .copy-btn {
         background: transparent;
-        border: none;
+        border: 1px solid #41444e;
+        color: #e0e0e0;
         cursor: pointer;
-        color: #fafafa;
-        opacity: 0.7;
-        padding: 4px;
+        padding: 5px 10px;
         border-radius: 4px;
+        font-size: 0.85rem;
         display: flex;
         align-items: center;
-        transition: opacity 0.2s, background-color 0.2s;
+        gap: 6px;
+        transition: all 0.2s;
     }
 
-    .copy-button-icon:hover {
-        opacity: 1;
+    .copy-btn:hover {
         background-color: #31333f;
+        border-color: #fafafa;
+        color: #fff;
     }
 
-    /* Pole tekstowe udające zwykły tekst */
-    .st-code-content {
+    /* Pole tekstowe (wygląda jak tekst, działa jak input) */
+    .editor-textarea {
         background-color: #0e1117;
         color: #fafafa;
         border: none;
         width: 100%;
-        padding: 15px;
+        padding: 20px;
         font-family: 'Source Code Pro', monospace;
-        font-size: 14px;
-        line-height: 1.5;
-        resize: none; /* Blokada zmiany rozmiaru myszką */
+        font-size: 15px;
+        line-height: 1.6;
+        resize: none;
         outline: none;
-        overflow-y: auto; /* Scroll wewnątrz */
-        min-height: 400px;
-        height: 100%;
+        min-height: 500px;
+        height: 70vh; /* Wysokość okna */
         white-space: pre-wrap;
     }
     
-    /* Ukrycie scrollbara dla estetyki (opcjonalne) */
-    .st-code-content::-webkit-scrollbar {
-        width: 8px;
+    .editor-textarea::-webkit-scrollbar {
+        width: 10px;
         background: #0e1117;
     }
-    .st-code-content::-webkit-scrollbar-thumb {
+    .editor-textarea::-webkit-scrollbar-thumb {
         background: #31333f;
-        border-radius: 4px;
+        border-radius: 5px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v12.5")
+st.title("🖋️ Dziennikarz Master PRO v12.6")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -125,7 +124,7 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     st.divider()
-    st.caption("v12.5 | Native Look & Fix")
+    st.caption("v12.6 | Safe Mode")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -141,7 +140,7 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY ---
+# [cite_start]--- MANIFESTY [cite: 1-38, 39-107] ---
 strict_length = f"CEL: {target_chars} znaków netto (bez enterów)."
 if typ_tekstu == "Wywiad":
     manifest = f"TRYB wywiad. {strict_length} Redaguj Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów (nadtytuł, tytuł, lid na 'O')."
@@ -165,13 +164,13 @@ if st.button("🚀 Generuj Materiał"):
             st.session_state.artykul = response.text
         except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI: JEDNO OKNO Z DZIAŁAJĄCYM KOPIOWANIEM ---
+# --- WYNIKI: BEZPIECZNE RENDEROWANIE ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # 1. Przyciski korekty i licznik (poza ramką)
+    # 1. Przyciski korekty i licznik
     c1, c2, c3 = st.columns([1, 1, 2])
     if c1.button("✂️ Skróć 20%"):
         res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
@@ -184,49 +183,43 @@ if "artykul" in st.session_state:
     with c3:
          st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
 
-    # 2. KOMPONENT ARTYKUŁU (HTML + JS + SVG)
-    # SVG ikonki kopiowania (dwie karteczki)
-    copy_icon_svg = """
-    <svg viewBox="0 0 24 24" aria-hidden="true" height="16" width="16" fill="currentColor">
-        <path d="M7 6V3a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v7a1 1 0 0 1-1 1h-2v3a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3zM9 2a1 1 0 0 0-1 1v3h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H10zM6 8v9a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V8H8a1 1 0 0 0-1 1zm9-5h2a1 1 0 0 1 1 1v7h-2V3z"></path>
-    </svg>
+    # 2. KOMPONENT HTML (Budowany bezpieczną metodą .replace)
+    # To zapobiega błędom "Wysypało się coś"
+    
+    escaped_text = html.escape(tekst) # Zabezpieczenie treści
+    
+    # Szablon HTML (JavaScript i CSS są tutaj bezpieczne)
+    html_template = """
+    <div class="editor-wrapper">
+        <div class="editor-header">
+            <button class="copy-btn" onclick="safeCopy()">
+                📋 Kopiuj tekst
+            </button>
+        </div>
+        <textarea id="main-textarea" class="editor-textarea" readonly>__CONTENT__</textarea>
+    </div>
+
+    <script>
+    function safeCopy() {
+        const textarea = document.getElementById("main-textarea");
+        textarea.select();
+        try {
+            document.execCommand("copy");
+            const btn = document.querySelector(".copy-btn");
+            btn.innerHTML = "✅ Skopiowano!";
+            setTimeout(() => { btn.innerHTML = "📋 Kopiuj tekst"; }, 2000);
+        } catch (err) {
+            console.error("Błąd kopiowania", err);
+        }
+        window.getSelection().removeAllRanges();
+    }
+    </script>
     """
     
-    # Bezpieczne kodowanie tekstu
-    safe_text = json.dumps(tekst) 
+    # Wstawienie treści w bezpieczny sposób
+    final_html = html_template.replace("__CONTENT__", escaped_text)
     
-    # Renderowanie HTML
-    st.markdown(f"""
-        <div class="st-code-container">
-            <div class="st-code-header">
-                <button class="copy-button-icon" onclick="copyNative()" title="Kopiuj do schowka">
-                    {copy_icon_svg}
-                </button>
-            </div>
-            <textarea id="article-content" class="st-code-content" readonly>{tekst}</textarea>
-        </div>
-
-        <script>
-        function copyNative() {{
-            const textArea = document.getElementById('article-content');
-            textArea.select();
-            textArea.setSelectionRange(0, 99999); /* Dla urządzeń mobilnych */
-            
-            try {{
-                document.execCommand('copy');
-                const btn = document.querySelector('.copy-button-icon');
-                const originalColor = btn.style.color;
-                btn.style.color = '#4caf50'; // Zielony kolor sukcesu
-                setTimeout(() => {{ btn.style.color = ''; }}, 1000);
-            }} catch (err) {{
-                console.error('Błąd kopiowania', err);
-            }}
-            
-            // Odznacz tekst po skopiowaniu
-            window.getSelection().removeAllRanges();
-        }}
-        </script>
-    """, unsafe_allow_html=True)
+    st.markdown(final_html, unsafe_allow_html=True)
     
-    # Przycisk pobierania na samym dole
+    # Przycisk pobierania
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
