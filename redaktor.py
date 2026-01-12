@@ -63,10 +63,7 @@ def fetch_url_content(url):
     except: return ""
 
 def count_body_chars_only(text):
-    """
-    Liczy znaki TYLKO w treści właściwej, pomijając sekcję propozycji.
-    Szuka separatorów: ### ARTYKUŁ lub ### WYWIAD.
-    """
+    """Liczy znaki netto pod separatorem."""
     if not text: return 0
     clean_text = text.replace("\r", "")
     separators = ["### ARTYKUŁ", "### WYWIAD", "### TREŚĆ"]
@@ -123,6 +120,12 @@ def add_to_history(text, type_label):
     st.session_state.history.insert(0, entry)
     save_history_to_disk(st.session_state.history)
 
+def delete_from_history(index):
+    """Usuwa jeden element z historii i zapisuje plik."""
+    if 0 <= index < len(st.session_state.history):
+        st.session_state.history.pop(index)
+        save_history_to_disk(st.session_state.history)
+
 # --- CSS ---
 st.markdown("""
 <style>
@@ -138,14 +141,14 @@ st.markdown("""
     div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb { background-color: #262730; border-radius: 10px; border: 2px solid #0e1117; }
     .stDeployButton {display:none;}
     
-    /* Stylizacja przycisków w historii, aby wyglądały bardziej jak kafelki */
+    /* Wyrównanie przycisków w historii */
     div[data-testid="stSidebar"] button {
         text-align: left;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v15.2")
+st.title("🖋️ Dziennikarz Master PRO v15.3")
 
 if not HAS_WEB_LIBS:
     st.warning("⚠️ Brak bibliotek requests/bs4. Linki nie będą działać.")
@@ -193,20 +196,27 @@ with st.sidebar:
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
             st.rerun()
 
-    # --- HISTORIA (NOWY WYGLĄD) ---
+    # --- HISTORIA (NOWY UKŁAD Z USUWANIEM) ---
     st.divider()
     st.subheader("🗄️ Historia")
     if len(st.session_state.history) > 0:
+        # Iterujemy przez historię
         for i, item in enumerate(st.session_state.history):
-            # Tytuł jako przycisk (zamiast linku, bo w Streamlit przyciski robią akcje)
-            # use_container_width=True sprawia, że wygląda jak kafelek
-            title_label = item.get('title', 'Bez tytułu')
-            btn_key = f"hist_btn_{i}_{item['time']}"
+            # Tworzymy dwie kolumny: szeroką dla tytułu (Wczytaj) i wąską dla iksu (Usuń)
+            col_load, col_del = st.columns([5, 1])
             
-            # Przycisk pełniący rolę linku
-            if st.button(title_label, key=btn_key, use_container_width=True):
-                st.session_state.artykul = item['content']
-                st.rerun()
+            # Kolumna 1: Tytuł (jako przycisk wczytania)
+            with col_load:
+                title_label = item.get('title', 'Bez tytułu')
+                if st.button(title_label, key=f"load_{i}_{item['time']}", use_container_width=True):
+                    st.session_state.artykul = item['content']
+                    st.rerun()
+            
+            # Kolumna 2: Usuwanie
+            with col_del:
+                if st.button("❌", key=f"del_{i}_{item['time']}", help="Usuń ten wpis"):
+                    delete_from_history(i)
+                    st.rerun()
             
             # Informacje pod przyciskiem (nieklikalne)
             chars_display = item.get('chars', 0)
@@ -215,7 +225,7 @@ with st.sidebar:
             # Separator wizualny
             st.markdown("<hr style='margin: 5px 0; opacity: 0.3;'>", unsafe_allow_html=True)
 
-        if st.button("🗑️ Usuń wszystko"):
+        if st.button("🗑️ Usuń WSZYSTKO", type="primary"):
             st.session_state.history = []
             save_history_to_disk([])
             st.rerun()
