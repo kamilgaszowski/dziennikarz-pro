@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import time
 import io
+import json
 
 # 1. KONFIGURACJA API
 try:
@@ -20,49 +21,75 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- CSS: PŁYWAJĄCY PRZYCISK KOPIOWANIA (Floating Action Button) ---
+# --- CSS: KONTENER "CHAT-LIKE" ---
+# To sprawia, że nagłówek z przyciskiem "Copy" jest zawsze widoczny wewnątrz ramki
 st.markdown("""
-    <style>
-    /* Styl dla pływającego kontenera */
-    .floating-copy-container {
-        position: fixed;
-        top: 80px;
-        right: 50px;
-        z-index: 9999;
+<style>
+    .editor-container {
+        background-color: #0e1117;
+        border: 1px solid #31333f;
+        border-radius: 8px;
+        margin-top: 20px;
+        overflow: hidden; /* Ważne dla zaokrągleń */
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        background: rgba(14, 17, 23, 0.9);
-        padding: 15px;
-        border-radius: 15px;
-        border: 1px solid #31333f;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
-    .floating-btn {
-        background-color: #ff4b4b;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: bold;
-        text-align: center;
-        transition: 0.3s;
+    
+    .editor-header {
+        background-color: #262730;
+        padding: 8px 15px;
+        border-bottom: 1px solid #31333f;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky; /* KLUCZ DO SUKCESU */
+        top: 0;
     }
-    .floating-btn:hover {
-        background-color: #ff2b2b;
-        transform: scale(1.05);
-    }
-    .char-counter {
-        color: white;
+
+    .editor-title {
+        color: #fafafa;
+        font-family: sans-serif;
         font-size: 0.85rem;
-        text-align: center;
-        font-family: monospace;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
-    </style>
+
+    .copy-btn-integrated {
+        background-color: transparent;
+        color: #bdc6d5;
+        border: 1px solid #41444e;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .copy-btn-integrated:hover {
+        background-color: #31333f;
+        color: white;
+        border-color: #bdc6d5;
+    }
+
+    .editor-content {
+        padding: 15px;
+        color: #fafafa;
+        font-family: 'Source Code Pro', monospace;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        white-space: pre-wrap; /* Zawijanie tekstu */
+        max-height: 70vh; /* Maksymalna wysokość okna - potem pojawia się scrollbar */
+        overflow-y: auto; /* Własny pasek przewijania */
+    }
+</style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v12.2")
+st.title("🖋️ Dziennikarz Master PRO v12.3")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -87,12 +114,12 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     st.divider()
-    st.caption("v12.2 | Floating Copy Mode")
+    st.caption("v12.3 | Integrated Sticky Header")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
 with col_a:
-    uploaded_audio = st.file_uploader("🎤 Nagranie audio:", type=['mp3', 'wav', 'm4a'])
+    uploaded_audio = st.file_uploader("🎤 Audio (MP3/WAV):", type=['mp3', 'wav', 'm4a'])
 with col_b:
     uploaded_files = st.file_uploader("📄 Pliki (PDF/DOCX):", accept_multiple_files=True)
 with col_c:
@@ -121,50 +148,62 @@ if st.button("🚀 Generuj Materiał"):
             while audio_file.state.name == "PROCESSING": time.sleep(2); audio_file = genai.get_file(audio_file.name)
             content.append(audio_file)
 
-    with st.spinner("AI tworzy tekst..."):
+    with st.spinner("Generowanie tekstu..."):
         try:
             response = model.generate_content(content)
             st.session_state.artykul = response.text
         except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI Z PŁYWAJĄCYM PRZYCISKIEM ---
+# --- WYNIKI: NOWY WYGLĄD ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # --- PŁYWAJĄCY PRZYCISK (HTML + JS) ---
-    # Ten element będzie "podążał" za użytkownikiem
-    escaped_text = tekst.replace("`", "\\`").replace("$", "\\$").replace("\n", "\\n")
+    # 1. Przyciski korekty (nad tekstem)
+    c1, c2, c3 = st.columns([1, 1, 2])
+    if c1.button("✂️ Skróć 20%"):
+        res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
+        st.session_state.artykul = res.text
+        st.rerun()
+    if c2.button("➕ Wydłuż 20%"):
+        res = model.generate_content(f"Wydłuż o 20%:\n\n{tekst}")
+        st.session_state.artykul = res.text
+        st.rerun()
+    with c3:
+         st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
+
+    # 2. KONTENER Z PRZYKLEJONYM NAGŁÓWKIEM (HTML/JS)
+    # Bezpieczne przygotowanie tekstu do JS
+    safe_text = json.dumps(tekst) # Automatycznie obsługuje cudzysłowy i nowe linie
+    
     st.markdown(f"""
-        <div class="floating-copy-container">
-            <div class="char-counter">
-                <b>{netto} znaków</b><br>
-                <span style="font-size: 0.7rem; color: #aaa;">cel: {target_chars}</span>
+        <div class="editor-container">
+            <div class="editor-header">
+                <div class="editor-title">
+                    <span>📄</span> Wynik (Markdown)
+                </div>
+                <button class="copy-btn-integrated" onclick="copyToClipboard()">
+                    📋 Kopiuj tekst
+                </button>
             </div>
-            <button class="floating-btn" onclick="copyText()">📋 KOPIUJ</button>
+            <div class="editor-content">{tekst}</div>
         </div>
+
         <script>
-        function copyText() {{
-            const t = `{escaped_text}`;
-            navigator.clipboard.writeText(t).then(() => {{
-                alert('Skopiowano artykuł ({netto} znaków)!');
+        function copyToClipboard() {{
+            const text = {safe_text};
+            navigator.clipboard.writeText(text).then(() => {{
+                // Zmiana tekstu przycisku na chwilę, by dać znać użytkownikowi
+                const btn = document.querySelector('.copy-btn-integrated');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✅ Skopiowano!';
+                setTimeout(() => {{
+                    btn.innerHTML = originalText;
+                }}, 2000);
             }});
         }}
         </script>
     """, unsafe_allow_html=True)
-
-    # Przyciski korekty
-    c1, c2 = st.columns(2)
-    if c1.button("✂️ Skróć o 20%"):
-        res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
-        st.session_state.artykul = res.text
-        st.rerun()
-    if c2.button("➕ Wydłuż o 20%"):
-        res = model.generate_content(f"Wydłuż o 20%:\n\n{tekst}")
-        st.session_state.artykul = res.text
-        st.rerun()
-
-    st.subheader("Treść materiału:")
-    st.code(tekst, language="markdown", wrap_lines=True)
-    st.download_button("💾 Pobierz .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
+    
+    st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
