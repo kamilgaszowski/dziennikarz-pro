@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (ACTION BUTTONS STYLE) ---
+# --- CSS (AUTO WIDTH BUTTONS) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -89,8 +89,7 @@ st.markdown("""
     [data-testid='stFileUploader'] svg { display: none; }
     .st-emotion-cache-1ae8axi { margin-bottom: 0px !important; }
 
-    /* 3. BUTTONY (ZWYKŁE I DOWNLOAD) */
-    /* Targetujemy oba typy przycisków, żeby wyglądały tak samo */
+    /* 3. BUTTONY */
     div.stButton > button, div.stDownloadButton > button {
         background-color: #2b2d35; 
         color: #ffffff; 
@@ -98,7 +97,7 @@ st.markdown("""
         border-radius: 4px; 
         font-size: 14px; 
         padding: 0.5rem 1rem; 
-        width: 100%;
+        /* USUNIĘTO WIDTH: 100% ABY POZWOLIĆ NA MAŁE PRZYCISKI */
         margin-top: 5px;
     }
     div.stButton > button:hover, div.stDownloadButton > button:hover { 
@@ -231,7 +230,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.19</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.20</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -314,7 +313,7 @@ if uploaded:
 # 2. NOTATKA
 pasted_text = st.text_area("notatki", height=120, placeholder="Wklej notatki, linki lub kontekst...", label_visibility="collapsed")
 
-# 3. GENERUJ
+# 3. GENERUJ (Use Container Width = True)
 start_gen = st.button("Generuj", use_container_width=True, type="primary")
 
 # --- LOGIKA GENEROWANIA ---
@@ -379,20 +378,19 @@ if "artykul" in st.session_state:
     st.markdown("### Wynik")
     st.code(st.session_state.artykul, language="markdown", wrap_lines=True)
     
-    # 4. PRZYCISKI AKCJI (POD KODEM)
-    c_copy, c_download = st.columns([1, 1])
+    # 4. PRZYCISKI AKCJI - MAŁE I OBOK SIEBIE
+    # Używamy wąskich kolumn: [mała, mała, duża pusta]
+    c_copy, c_down, c_space = st.columns([1, 1, 10])
     
     with c_copy:
-        # Przycisk Kopiuj (Symulacja UI)
-        if st.button("Kopiuj", use_container_width=True):
+        if st.button("Kopiuj", use_container_width=False):
             st.toast("Skopiowano do schowka!", icon="📋")
             
-    with c_download:
-        # Przycisk Pobierz (Bez .txt w labelu)
+    with c_down:
         st.download_button(
             label="Pobierz",
             data=st.session_state.artykul,
             file_name=f"{typ_tekstu.lower()}.txt",
             mime="text/plain",
-            use_container_width=True
+            use_container_width=False
         )
