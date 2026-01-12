@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import time
 import io
 
 # 1. KONFIGURACJA API
@@ -19,37 +20,47 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- CSS: WYMUSZENIE SCROLLA W ST.CODE ---
-# To sprawia, że okno z kodem ma stałą wysokość i własny scrollbar,
-# a przycisk kopiowania (natywny) zostaje na miejscu.
+# --- CSS: MAGICZNY ATRYBUT FIXED/STICKY ---
+# To jest kluczowa zmiana. Wymuszamy na bloku kodu zachowanie "okna".
 st.markdown("""
 <style>
-    /* Docelujemy w blok kodu Streamlit */
+    /* Namierzamy kontener kodu Streamlit */
     div[data-testid="stCodeBlock"] {
-        max-height: 70vh !important; /* Maksymalna wysokość okna */
-        overflow-y: auto !important; /* Własny pasek przewijania */
-        border: 1px solid #31333f;
+        /* Ustawiamy maksymalną wysokość na 75% ekranu */
+        max-height: 75vh !important; 
+        
+        /* Dodajemy scrollbar wewnątrz tego okna */
+        overflow-y: auto !important;
+        
+        /* Estetyka ramki */
+        border: 1px solid #41444e;
         border-radius: 8px;
-    }
-    
-    /* Opcjonalnie: stylizacja paska przewijania */
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar {
-        width: 10px;
-    }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb {
-        background: #31333f;
-        border-radius: 5px;
+        background-color: #0e1117;
     }
 
-    /* Ukrycie paska przycisków Streamlit nad nagłówkami */
+    /* Opcjonalnie: Stylizacja paska przewijania, żeby był ładny */
+    div[data-testid="stCodeBlock"]::-webkit-scrollbar {
+        width: 12px;
+    }
+    div[data-testid="stCodeBlock"]::-webkit-scrollbar-track {
+        background: #0e1117;
+    }
+    div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb {
+        background-color: #262730;
+        border-radius: 10px;
+        border: 2px solid #0e1117;
+    }
+    
+    /* Ukrycie zbędnych przycisków Streamlit, zostaje tylko Copy */
     .stDeployButton {display:none;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v13.1")
+st.title("🖋️ Dziennikarz Master PRO v13.2")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
+    # Liczymy znaki bez enterów
     return len(text.replace("\n", "").replace("\r", ""))
 
 def read_text_file(uploaded_file):
@@ -71,7 +82,7 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     st.divider()
-    st.caption("v13.1 | Native Scroll Fix")
+    st.caption("v13.2 | CSS Fixed Scroll")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -87,7 +98,7 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY ---
+# --- MANIFESTY (PEŁNE) ---
 strict_length = f"CEL: {target_chars} znaków netto (bez enterów)."
 if typ_tekstu == "Wywiad":
     manifest = f"TRYB wywiad. {strict_length} Redaguj Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów (nadtytuł, tytuł, lid na 'O')."
@@ -96,13 +107,10 @@ else:
 
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
-    # Przygotowanie promptu
     content = [manifest]
     if all_source: content.append(f"TEKST:\n{all_source}")
     
-    # Obsługa Audio
     if uploaded_audio:
-        import time
         with st.spinner("Przesyłam audio do Gemini 3..."):
             with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
             audio_file = genai.upload_file(path="temp.mp3")
@@ -111,20 +119,19 @@ if st.button("🚀 Generuj Materiał"):
                 audio_file = genai.get_file(audio_file.name)
             content.append(audio_file)
 
-    # Właściwe generowanie
     with st.spinner("Generowanie tekstu..."):
         try:
             response = model.generate_content(content)
             st.session_state.artykul = response.text
         except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI: POJEDYNCZE OKNO ---
+# --- WYNIKI: JEDNO OKNO Z PRZYKLEJONYM PASKIEM ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # 1. Pasek narzędzi nad oknem
+    # 1. Pasek narzędzi
     c1, c2, c3 = st.columns([1, 1, 2])
     if c1.button("✂️ Skróć 20%"):
         res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
@@ -137,10 +144,10 @@ if "artykul" in st.session_state:
     with c3:
          st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
 
-    # 2. GŁÓWNE OKNO WYNIKU (st.code + CSS)
-    # Używamy natywnego st.code, bo jego przycisk kopiowania jest niezawodny.
-    # CSS powyżej wymusza na nim zachowanie "okna z przewijaniem".
+    # 2. GŁÓWNE OKNO (Standardowe st.code + CSS Fix)
     st.subheader("Gotowy Artykuł:")
+    # Dzięki CSS wyżej, to okno będzie miało stałą wysokość i wewnętrzny scroll.
+    # Przycisk kopiowania (ikona w rogu) pozostanie w miejscu.
     st.code(tekst, language="markdown", wrap_lines=True)
     
     # 3. Pobieranie
