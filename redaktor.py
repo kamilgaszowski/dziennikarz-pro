@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (AUTO WIDTH BUTTONS) ---
+# --- CSS (RESPONSIVE MOBILE) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,11 +62,11 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER */
+    /* 2. UPLOADER - BAZOWY (DESKTOP) */
     [data-testid='stFileUploader'] {
         margin-top: 10px;
         margin-bottom: 30px !important;
-        max-width: 500px; 
+        max-width: 500px; /* Sztywna szerokość na Desktop */
         margin-left: 0px !important;
         margin-right: auto;
     }
@@ -82,14 +82,27 @@ st.markdown("""
         height: auto !important;
         min-height: 140px !important; 
     }
-    [data-testid='stFileUploader'] section:hover {
-        border-color: #666;
-        background-color: #1c1f26;
+    
+    /* 3. MEDIA QUERY - MOBILE (max-width: 640px) */
+    @media only screen and (max-width: 640px) {
+        /* Uploader na całą szerokość telefonu */
+        [data-testid='stFileUploader'] {
+            max-width: 100% !important;
+            margin-right: 0px !important;
+        }
+        
+        /* Przyciski Kopiuj/Pobierz większe na mobile */
+        div.stButton > button, div.stDownloadButton > button {
+            padding: 0.6rem 0.5rem !important; /* Większe pole dotyku */
+        }
     }
+
+    /* Reszta stylów bez zmian */
+    [data-testid='stFileUploader'] section:hover { border-color: #666; background-color: #1c1f26; }
     [data-testid='stFileUploader'] svg { display: none; }
     .st-emotion-cache-1ae8axi { margin-bottom: 0px !important; }
 
-    /* 3. BUTTONY */
+    /* BUTTONY */
     div.stButton > button, div.stDownloadButton > button {
         background-color: #2b2d35; 
         color: #ffffff; 
@@ -97,22 +110,19 @@ st.markdown("""
         border-radius: 4px; 
         font-size: 14px; 
         padding: 0.5rem 1rem; 
-        /* USUNIĘTO WIDTH: 100% ABY POZWOLIĆ NA MAŁE PRZYCISKI */
         margin-top: 5px;
     }
     div.stButton > button:hover, div.stDownloadButton > button:hover { 
-        background-color: #ffffff; 
-        color: #000000; 
-        border-color: #ffffff; 
+        background-color: #ffffff; color: #000000; border-color: #ffffff; 
     }
 
-    /* 4. TEXT AREA */
+    /* TEXT AREA */
     [data-testid="stTextArea"] textarea {
         background-color: #16181e; border: 1px solid #333;
     }
     [data-testid="stTextArea"] label { display: none; }
 
-    /* 5. HISTORIA SIDEBAR */
+    /* HISTORIA SIDEBAR */
     [data-testid="stSidebar"] div.stButton > button p {
         white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; width: 100%; display: block;
     }
@@ -230,7 +240,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.20</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.21</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -313,7 +323,7 @@ if uploaded:
 # 2. NOTATKA
 pasted_text = st.text_area("notatki", height=120, placeholder="Wklej notatki, linki lub kontekst...", label_visibility="collapsed")
 
-# 3. GENERUJ (Use Container Width = True)
+# 3. GENERUJ
 start_gen = st.button("Generuj", use_container_width=True, type="primary")
 
 # --- LOGIKA GENEROWANIA ---
@@ -378,19 +388,24 @@ if "artykul" in st.session_state:
     st.markdown("### Wynik")
     st.code(st.session_state.artykul, language="markdown", wrap_lines=True)
     
-    # 4. PRZYCISKI AKCJI - MAŁE I OBOK SIEBIE
-    # Używamy wąskich kolumn: [mała, mała, duża pusta]
-    c_copy, c_down, c_space = st.columns([1, 1, 10])
+    # 4. PRZYCISKI AKCJI (RESPONSIVE)
+    # Na mobile [1, 1] rozłoży przyciski 50/50 na całą szerokość
+    # Na desktopie będą małe, bo mają use_container_width=False (Python) ALE my CSS-em to nadpiszemy
     
-    with c_copy:
-        if st.button("Kopiuj", use_container_width=False):
+    col_actions = st.columns([1, 1, 10]) # Małe na desktop
+    
+    # Trick: W Pythonie zostawiamy układ kolumn, a CSS na mobile zrobi z tego flex/block
+    # Aby działało ładnie na mobile, musimy użyć:
+    
+    with col_actions[0]:
+        if st.button("Kopiuj", use_container_width=True): # True -> wypełni kolumnę
             st.toast("Skopiowano do schowka!", icon="📋")
             
-    with c_down:
+    with col_actions[1]:
         st.download_button(
             label="Pobierz",
             data=st.session_state.artykul,
             file_name=f"{typ_tekstu.lower()}.txt",
             mime="text/plain",
-            use_container_width=False
+            use_container_width=True # True -> wypełni kolumnę
         )
