@@ -1,130 +1,114 @@
 import streamlit as st
 import google.generativeai as genai
+import io
 
-# --- KONFIGURACJA ---
-st.set_page_config(page_title="Dziennikarz Master PRO", layout="wide", page_icon="🖋️")
-st.set_page_config(page_title="Dziennikarz Master PRO v3.0", layout="wide")
+# 1. KONFIGURACJA API (Pobiera klucz z Twoich 'Secrets')
+try:
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    # Zmiana na 'gemini-1.5-flash' dla lepszej stabilności (naprawia błąd 404)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error(f"Błąd konfiguracji API: {e}")
 
-# CSS dla lepszego wyglądu (opcjonalnie)
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; background-color: #007bff; color: white; }
-    </style>
- """, unsafe_allow_html=True)
+# Obsługa bibliotek do plików
+try:
+    from docx import Document
+    import PyPDF2
+    HAS_LIBS = True
+except ImportError:
+    HAS_LIBS = False
 
-# --- MANIFESTY (Ostateczne wersje) ---
-# --- MANIFESTY (Zoptymalizowane pod Gemini 3 / 2.5) ---
-MANIFEST_NEWS = """
-Jesteś surowym redaktorem agencji prasowej (standard Reuters/PAP). 
-TWOJE ZADANIA:
-1. LEAD: Pierwszy akapit (max 25 słów) musi zawierać: Kto, co, gdzie, kiedy. Najważniejsza informacja na start.
-2. STRUKTURA: Odwrócona piramida. Akapity 2-3 zdaniowe.
-3. FILTR ANTY-AI: Bezwzględnie usuń: "kluczowy", "istotny", "unikalny", "fascynujący", "warto zauważyć", "w dzisiejszych czasach".
-4. STYL: Używaj strony czynnej. Zamiast "zostało przeprowadzone", pisz "przeprowadzono".
-Jesteś doświadczonym dziennikarzem depeszowym. TWOIM ZADANIEM NIE JEST STRESZCZENIE, LECZ NAPISANIE NEWSA.
-1. TYTUŁ: Chwytliwy, informacyjny, w czasie teraźniejszym.
-2. LEAD: Pierwszy akapit (pogrubiony) musi zawierać 5W: Kto, co, gdzie, kiedy, dlaczego.
-3. STRUKTURA: Napisz artykuł w formie odwróconej piramidy. Najważniejsze fakty na górze, detale niżej.
-4. STYL: Usuń wszystkie "AI-izmy" (kluczowy, istotny, warto zauważyć). Pisz krótko, twardo, konkretnie.
-5. ZAKAZ: Nie pisz "W tekście mowa o...", po prostu napisz newsa tak, jakbyś go publikował na portalu.
-"""
+st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
+st.title("🖋️ Dziennikarz Master PRO v11.1")
 
-MANIFEST_WYWIAD = """
-Jesteś redaktorem wywiadów prasowych.
-TWOJE ZADANIA:
-1. NUT GRAF: Napisz wstęp wyjaśniający kontekst rozmowy.
-2. FORMAT: Pytania pogrubione (np. **Pytanie:**), odpowiedzi czyste.
-3. REDAKCJA: Usuń wypełniacze (yhy, mhm, no właśnie, wie pan). Skracaj dygresje, zostawiając samo mięso.
-4. CHARAKTER: Zachowaj specyficzny język rozmówcy. Jeśli mówi potocznie – zostaw to. Nie poprawiaj go na styl encyklopedyczny.
-5. FILTR ANTY-AI: Usuń zwroty typu: "to świetne pytanie", "cieszę się, że o to pytasz".
-Jesteś redaktorem prowadzącym w dużym tygodniku. TWOIM ZADANIEM JEST STWORZENIE GOTOWEGO WYWIADU (Q&A).
-1. WSTĘP: Napisz 3-zdaniowy wstęp (tzw. blurb) o rozmówcy i temacie.
-2. FORMAT: Pytania redakcji oznacz jako **Pytanie:**, odpowiedzi jako **Odpowiedź:**.
-3. REDAKCJA: Bezwzględnie usuń powtórzenia, "ee", "yy", wtrącenia typu "no wie pan" oraz dygresje, które nic nie wnoszą.
-4. DYNAMIKA: Jeśli rozmówca mówi zbyt długo, podziel jego wypowiedź dodatkowym pytaniem redakcyjnym.
-5. STYL: Zachowaj energię rozmowy, ale spraw, by brzmiała inteligentnie i płynnie.
-"""
+# Ostrzeżenie o brakujących bibliotekach (z Twojego screena)
+if not HAS_LIBS:
+    st.warning("⚠️ Brak bibliotek do czytania DOCX/PDF. Zainstaluj python-docx i pypdf2.")
 
-# --- INTERFEJS ---
-st.title("🖋️ Dziennikarz Master PRO")
-st.subheader("Twoje studio transkrypcji i redakcji")
-st.title("🖋️ Dziennikarz Master PRO (High-End Edition)")
+# --- FUNKCJA CZYTANIA PLIKÓW ---
+def read_file(uploaded_file):
+    try:
+        if uploaded_file.name.endswith('.txt'):
+            return uploaded_file.read().decode("utf-8")
+        elif uploaded_file.name.endswith('.docx') and HAS_LIBS:
+            doc = Document(uploaded_file)
+            return "\n".join([para.text for para in doc.paragraphs])
+        elif uploaded_file.name.endswith('.pdf') and HAS_LIBS:
+            pdf_reader = PyPDF2.PdfReader(uploaded_file)
+            return "\n".join([page.extract_text() for page in pdf_reader.pages])
+    except Exception as e:
+        st.error(f"Błąd pliku {uploaded_file.name}: {e}")
+    return ""
 
-with st.expander("🔑 Ustawienia API i Modelu", expanded=True):
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        api_key = st.text_input("Wklej Google API Key:", type="password")
-    with col2:
-        model_name = st.selectbox("Wybierz silnik:", ["gemini-2.5-flash", "gemini-2.5-pro-latest"])
-        # Tu wpisałem nazwy, które powinny działać na Twoim koncie płatnym
-        model_name = st.selectbox("Wybierz silnik:", [
-            "gemini-3-pro-preview", 
-            "gemini-2.5-pro", 
-            "gemini-1.5-pro-latest"
-        ])
+# --- PANEL BOCZNY (USTAWIENIA) ---
+with st.sidebar:
+    st.header("⚙️ Ustawienia")
+    # Zmieniono 'Publicystyka' na 'Wywiad' zgodnie z wytycznymi
+    typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
+    target_chars = st.slider("Docelowa liczba znaków:", 500, 15000, value=3500, step=500)
+    st.info(f"Tryb: {typ_tekstu} | Cel: {target_chars} znaków")
 
-if api_key:
-    genai.configure(api_key=api_key)
-    
-    tab1, tab2 = st.tabs(["📝 Przetwarzanie", "📜 Twoje Manifesty"])
-    tab1, tab2 = st.tabs(["📝 Redakcja Materiału", "📜 Instrukcje Systemowe"])
-    
-    with tab2:
-        st.info("Oto instrukcje, którymi kieruje się AI:")
-        st.text_area("Manifest News:", MANIFEST_NEWS, height=150, disabled=True)
-        st.text_area("Manifest Wywiad:", MANIFEST_WYWIAD, height=150, disabled=True)
+# --- WEJŚCIE DANYCH ---
+col1, col2 = st.columns(2)
+with col1:
+    uploaded_files = st.file_uploader("Dodaj pliki źródłowe:", accept_multiple_files=True)
+with col2:
+    pasted_text = st.text_area("Lub wklej materiały tutaj:", height=150)
 
-    with tab1:
-        tryb = st.radio("Wybierz format docelowy:", ["News", "Wywiad"], horizontal=True)
-        
-        uploaded_file = st.file_uploader("Wgraj nagranie (audio) lub plik tekstowy:", type=["mp3", "wav", "m4a", "txt"])
-        uploaded_file = st.file_uploader("Wgraj nagranie audio lub tekst:", type=["mp3", "wav", "m4a", "txt"])
-        
-        if st.button("🚀 GENERUJ MATERIAŁ"):
-            if uploaded_file is not None:
-                with st.spinner("Gemini analizuje materiał..."):
-            if uploaded_file:
-                with st.spinner(f"Uruchamiam silnik {model_name}..."):
-                    try:
-                        # Wybór instrukcji
-                        current_prompt = MANIFEST_NEWS if tryb == "News" else MANIFEST_WYWIAD
-                        
-                        model = genai.GenerativeModel(
-                            model_name=model_name,
-                            system_instruction=current_prompt
-                        )
-                        prompt_system = MANIFEST_NEWS if tryb == "News" else MANIFEST_WYWIAD
-                        model = genai.GenerativeModel(model_name=model_name, system_instruction=prompt_system)
-                        
-                        # Obsługa audio vs tekst
-                        if uploaded_file.type.startswith('audio'):
-                            response = model.generate_content([
-                            # Dla Gemini 3 ważne jest, by dodać precyzyjne polecenie obróbki
-                            content = [
-                                {"mime_type": uploaded_file.type, "data": uploaded_file.read()},
-                                "Przeprowadź transkrypcję i zredaguj zgodnie z instrukcją."
-                            ])
-                                f"Na podstawie tego nagrania napisz profesjonalny {tryb.lower()}. Nie streszczaj, napisz gotowy tekst dziennikarski."
-                            ]
-                        else:
-                            text_content = uploaded_file.read().decode("utf-8")
-                            response = model.generate_content(text_content)
-                            content = f"Przerób poniższy tekst na {tryb.lower()} zgodnie z instrukcjami systemowymi:\n\n{text_content}"
-                        
-                        st.success("Gotowe!")
-                        st.markdown("---")
-                        response = model.generate_content(content)
-                        st.success("Materiał gotowy!")
-                        st.markdown(response.text)
-                        st.download_button("Pobierz tekst (.txt)", response.text, file_name=f"{tryb}_zredagowany.txt")
-                        st.download_button("Pobierz (.txt)", response.text, file_name="tekst_zredagowany.txt")
-                        
-                    except Exception as e:
-                        st.error(f"Błąd przetwarzania: {e}")
-                        st.error(f"Błąd: {e}")
-            else:
-                st.warning("Najpierw wgraj plik.")
+all_source = pasted_text
+if uploaded_files:
+    for f in uploaded_files:
+        all_source += f"\n\n--- Materiał z: {f.name} ---\n" + read_file(f)
+
+# --- ŁADOWANIE MANIFESTÓW Z TWOICH PLIKÓW ---
+if typ_tekstu == "Wywiad":
+    manifest = f"""
+    TRYB wywiad[cite: 1]. Zadanie jednorazowe, pracuj wyłącznie na materiale źródłowym[cite: 3, 4]. 
+    Nie dopisuj treści, tylko porządkuj i wygładzasz język[cite: 2]. Pokaż tylko gotowy wynik[cite: 5].
+    ZAKAZY: Metajęzyk (np. 'w tej rozmowie'), dwukropki, średniki, separatory[cite: 6, 8, 11].
+    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid 1-2 zdania zaczynający się od 'O')[cite: 12, 16, 17].
+    KONSTRUKCJA: Q/A (P: ... O: ...) 6-12 bloków[cite: 18, 19]. Styl eksploracyjny[cite: 20].
+    REDAKCJA: Usuń 'ja' w 99%, napraw neologizmy (dodaj sekcję ZAMIANY na końcu jeśli były)[cite: 29, 32, 33].
+    CEL DŁUGOŚCI: {target_chars} znaków ±300[cite: 37].
+    """
 else:
-    st.warning("Wprowadź swój klucz API w sekcji powyżej, aby odblokować narzędzie.")
-                st.warning("Najpierw wgraj plik.")
+    manifest = f"""
+    TRYB article[cite: 39]. Zadanie jednorazowe na materiale użytkownika[cite: 40, 41]. 
+    Co najmniej 2/3 treści musi pochodzić ze źródła głównego[cite: 47, 48].
+    ZAKAZY: Metajęzyk, komentowanie wypowiedzi (np. 'zdradza', 'wyznaje')[cite: 51, 52, 53].
+    TERMINOLOGIA: Nie używaj słowa 'kapłan'. Zastąp: ksiądz, duchowny, duszpasterz[cite: 58, 59].
+    CYTATY: Ramka pauzowa (– Zdanie. –), min. 4 zdania cytatu, min. 3 zdania kontekstu przed i po[cite: 72, 73, 74].
+    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid)[cite: 78, 83].
+    STRUKTURA: Relacja (3 twarde fakty w 1 akapicie) lub tekst problemowy[cite: 93, 97, 99].
+    ZAKOŃCZENIE: Konkret organizacyjny lub cytat, brak ogólnych refleksji[cite: 105, 106].
+    CEL DŁUGOŚCI: {target_chars} znaków ±300[cite: 85].
+    """
+
+# --- GENEROWANIE ---
+if st.button("🚀 Generuj Materiał"):
+    if all_source.strip():
+        with st.spinner(f"Generuję {typ_tekstu}..."):
+            try:
+                full_prompt = f"{manifest}\n\nMATERIAŁY:\n{all_source}"
+                response = model.generate_content(full_prompt)
+                st.session_state.artykul = response.text
+            except Exception as e:
+                st.error(f"Błąd API Gemini: {e}")
+    else:
+        st.error("Proszę dodać materiały źródłowe!")
+
+# --- WYNIKI ---
+if "artykul" in st.session_state:
+    tekst = st.session_state.artykul
+    dlugosc = len(tekst)
+    roznica = dlugosc - target_chars
+    
+    st.divider()
+    # Naprawiony licznik: różnica ujemna będzie zielona (zapas)
+    st.metric(label="Liczba znaków", value=dlugosc, delta=f"{roznica} względem celu", delta_color="inverse")
+
+    st.subheader("Finalny tekst:")
+    # st.code automatycznie dodaje przycisk 'Copy' w rogu
+    st.code(tekst, language="markdown", wrap_lines=True)
+    
+    st.download_button(label="💾 Pobierz .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt", mime="text/plain")
