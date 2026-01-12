@@ -22,74 +22,74 @@ except ImportError:
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
 # --- CSS: KONTENER "CHAT-LIKE" ---
-# To sprawia, że nagłówek z przyciskiem "Copy" jest zawsze widoczny wewnątrz ramki
+# Stylizacja ramki z przyklejonym nagłówkiem
 st.markdown("""
 <style>
     .editor-container {
         background-color: #0e1117;
         border: 1px solid #31333f;
         border-radius: 8px;
-        margin-top: 20px;
-        overflow: hidden; /* Ważne dla zaokrągleń */
+        margin-top: 10px;
+        overflow: hidden;
         display: flex;
         flex-direction: column;
+        position: relative;
     }
     
     .editor-header {
         background-color: #262730;
-        padding: 8px 15px;
+        padding: 10px 15px;
         border-bottom: 1px solid #31333f;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        position: sticky; /* KLUCZ DO SUKCESU */
+        position: sticky; /* PRZYKLEJENIE DO GÓRY */
         top: 0;
+        z-index: 10;
     }
 
     .editor-title {
-        color: #fafafa;
+        color: #bdc6d5;
         font-family: sans-serif;
         font-size: 0.85rem;
         font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
 
     .copy-btn-integrated {
         background-color: transparent;
-        color: #bdc6d5;
+        color: #fafafa;
         border: 1px solid #41444e;
         border-radius: 4px;
-        padding: 4px 10px;
+        padding: 5px 12px;
         font-size: 0.8rem;
         cursor: pointer;
         transition: all 0.2s;
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 6px;
     }
 
     .copy-btn-integrated:hover {
         background-color: #31333f;
-        color: white;
-        border-color: #bdc6d5;
+        border-color: #fafafa;
     }
 
     .editor-content {
-        padding: 15px;
+        padding: 20px;
         color: #fafafa;
         font-family: 'Source Code Pro', monospace;
-        font-size: 0.9rem;
-        line-height: 1.5;
-        white-space: pre-wrap; /* Zawijanie tekstu */
-        max-height: 70vh; /* Maksymalna wysokość okna - potem pojawia się scrollbar */
-        overflow-y: auto; /* Własny pasek przewijania */
+        font-size: 0.95rem;
+        line-height: 1.6;
+        white-space: pre-wrap; /* Zawijanie wierszy */
+        max-height: 75vh; /* Ramka ma max 75% wysokości ekranu */
+        overflow-y: auto; /* Własny scroll wewnątrz ramki */
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v12.3")
+st.title("🖋️ Dziennikarz Master PRO v12.4")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -114,7 +114,7 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     st.divider()
-    st.caption("v12.3 | Integrated Sticky Header")
+    st.caption("v12.4 | Gemini 3 Pro")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -130,12 +130,12 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY ---
+# --- MANIFESTY (PROMPTY) ---
 strict_length = f"CEL: {target_chars} znaków netto (bez enterów)."
 if typ_tekstu == "Wywiad":
     manifest = f"TRYB wywiad. {strict_length} Redaguj Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów (nadtytuł, tytuł, lid na 'O')."
 else:
-    manifest = f"TRYB article/news. {strict_length} Redaktor prasowy. Rdzeń: 2/3 treści. Cytaty w ramce pauzowej. Zakaz słowa 'kapłan'."
+    manifest = f"TRYB article/news. {strict_length} Redaktor prasowy. Rdzeń: 2/3 treści ze źródła. Cytaty w ramce pauzowej. Zakaz słowa 'kapłan'."
 
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
@@ -154,13 +154,13 @@ if st.button("🚀 Generuj Materiał"):
             st.session_state.artykul = response.text
         except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI: NOWY WYGLĄD ---
+# --- WYNIKI: TYLKO JEDEN WIDOK ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # 1. Przyciski korekty (nad tekstem)
+    # 1. Przyciski korekty i licznik
     c1, c2, c3 = st.columns([1, 1, 2])
     if c1.button("✂️ Skróć 20%"):
         res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
@@ -173,18 +173,17 @@ if "artykul" in st.session_state:
     with c3:
          st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
 
-    # 2. KONTENER Z PRZYKLEJONYM NAGŁÓWKIEM (HTML/JS)
-    # Bezpieczne przygotowanie tekstu do JS
-    safe_text = json.dumps(tekst) # Automatycznie obsługuje cudzysłowy i nowe linie
+    # 2. KONTENER HTML (To jest ten właściwy element)
+    safe_text = json.dumps(tekst) 
     
     st.markdown(f"""
         <div class="editor-container">
             <div class="editor-header">
                 <div class="editor-title">
-                    <span>📄</span> Wynik (Markdown)
+                    Gotowy Artykuł
                 </div>
                 <button class="copy-btn-integrated" onclick="copyToClipboard()">
-                    📋 Kopiuj tekst
+                    📋 Kopiuj
                 </button>
             </div>
             <div class="editor-content">{tekst}</div>
@@ -194,7 +193,6 @@ if "artykul" in st.session_state:
         function copyToClipboard() {{
             const text = {safe_text};
             navigator.clipboard.writeText(text).then(() => {{
-                // Zmiana tekstu przycisku na chwilę, by dać znać użytkownikowi
                 const btn = document.querySelector('.copy-btn-integrated');
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '✅ Skopiowano!';
@@ -206,4 +204,5 @@ if "artykul" in st.session_state:
         </script>
     """, unsafe_allow_html=True)
     
+    # 3. Pobieranie pliku (bez wyświetlania tekstu ponownie!)
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
