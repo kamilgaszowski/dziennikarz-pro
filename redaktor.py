@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS ---
+# --- CSS (MINIMALIST FLOW) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -59,58 +59,69 @@ st.markdown("""
         font-size: 12px;
         color: #666;
         margin-top: -10px;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER */
+    /* 2. UPLOADER - SLIM STRIP STYLE */
+    [data-testid='stFileUploader'] {
+        margin-top: 0px;
+        margin-bottom: 15px;
+    }
+    /* Ukrywamy standardowe teksty */
     [data-testid='stFileUploader'] section > div:first-child span, 
     [data-testid='stFileUploader'] section > div:first-child small { display: none; }
     
+    /* Własny, minimalistyczny tekst w jednej linii */
     [data-testid='stFileUploader'] section > div:first-child::before {
-        content: "Importuj";
-        display: block; text-align: center; font-weight: 600; font-size: 16px; color: #e0e0e0; margin-bottom: 5px;
+        content: "📥 Importuj materiały (Audio, Dokumenty)";
+        display: block; text-align: center; font-weight: 500; font-size: 14px; color: #bbb;
     }
-    [data-testid='stFileUploader'] section > div:first-child::after {
-        content: "Limit 200MB • TXT, PDF, DOCX, MP3, WAV, M4A";
-        display: block; text-align: center; font-size: 11px; color: #666;
-    }
+    
+    /* Stylizacja paska */
     [data-testid='stFileUploader'] section {
-        padding: 20px 10px !important;
-        background-color: #16181e; border: 1px dashed #444; border-radius: 6px;
+        padding: 15px !important; /* Niski padding */
+        min-height: 0px !important;
+        background-color: #16181e; 
+        border: 1px dashed #333; 
+        border-radius: 4px;
     }
-    [data-testid='stFileUploader'] section:hover { border-color: #888; background-color: #1c1f26; }
+    [data-testid='stFileUploader'] section:hover { border-color: #666; background-color: #1c1f26; }
     [data-testid='stFileUploader'] svg { display: none; }
+    
+    /* Zmniejszenie odstępu po wgraniu pliku */
+    .st-emotion-cache-1ae8axi { margin-bottom: 0px !important; }
 
     /* 3. BUTTONY GŁÓWNE */
     div.stButton > button {
         background-color: #2b2d35; color: #ffffff; border: 1px solid #41444e;
         border-radius: 4px; font-size: 14px; padding: 0.5rem 1rem; width: 100%;
+        margin-top: 10px;
     }
     div.stButton > button:hover { background-color: #ffffff; color: #000000; border-color: #ffffff; }
 
-    /* 4. HISTORIA - TITLE BUTTON */
+    /* 4. TEXT AREA */
+    [data-testid="stTextArea"] textarea {
+        background-color: #16181e; border: 1px solid #333;
+    }
+    [data-testid="stTextArea"] label {
+        display: none; /* Ukrywamy label "Notatki", bo kontekst jest oczywisty */
+    }
+
+    /* 5. HISTORIA SIDEBAR */
     [data-testid="stSidebar"] div.stButton > button p {
         white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; width: 100%; display: block;
     }
     [data-testid="stSidebar"] div.stButton > button {
         padding: 0.25rem 0.5rem !important; font-size: 13px !important; text-align: left !important; border: 1px solid #333;
     }
-
-    /* 5. HISTORIA - PRZYCISK X */
     div[data-testid="column"] button.x-style {
         background: transparent !important; border: none !important; color: #555 !important;
         padding: 0px !important; font-size: 18px !important; line-height: 1 !important;
         height: auto !important; min-height: 0px !important; margin-top: 4px !important; width: auto !important;
     }
     div[data-testid="column"] button.x-style:hover { color: #ef5350 !important; }
-    div[data-testid="column"] button.x-style:active { background: transparent !important; }
-
-    /* 6. EXPANDER STYLING (HISTORIA) */
-    /* Zmniejszenie paddingu wewnątrz expandera */
-    [data-testid="stExpanderDetails"] {
-        padding-left: 0.5rem; padding-right: 0.5rem;
-    }
-
+    
+    [data-testid="stExpanderDetails"] { padding-left: 0.5rem; padding-right: 0.5rem; }
     div[data-testid="stCodeBlock"] { border: 1px solid #333; background-color: #0e1117; }
     .stDeployButton {display:none;}
 </style>
@@ -214,7 +225,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.10</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.11</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -255,7 +266,6 @@ with st.sidebar:
 
     st.divider()
     
-    # HISTORIA (ZWINIĘTA W EXPANDER)
     with st.expander("Historia", expanded=False):
         if st.session_state.history:
             for i, item in enumerate(st.session_state.history):
@@ -266,7 +276,7 @@ with st.sidebar:
                         st.rerun()
                 with c_del:
                     def on_del_click(idx=i): delete_history_item(idx)
-                    st.button("×", key=f"d{i}", on_click=on_del_click, type="secondary") # CSS zrobi resztę
+                    st.button("×", key=f"d{i}", on_click=on_del_click, type="secondary")
 
                 st.markdown(f"""
                 <div style='font-size: 10px; color: #666; margin-top: -14px; margin-bottom: 8px; margin-left: 2px;'>
@@ -278,31 +288,28 @@ with st.sidebar:
         else:
             st.caption("Pusto.")
 
-# --- GŁÓWNY INTERFEJS ---
+# --- GŁÓWNY INTERFEJS (TOP-DOWN FLOW) ---
 
-pasted_text = st.text_area("Notatki / Kontekst:", height=100, placeholder="Wklej notatki lub linki...", label_visibility="visible")
-
-col_left, col_right = st.columns([1, 3]) 
+# 1. IMPORT (Slim strip pod tytułem)
+uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
 
 audio_to_proc = None
 docs_to_proc = []
+if uploaded:
+    for f in uploaded:
+        if f.name.endswith(('.mp3','.wav','.m4a')): audio_to_proc = f
+        else: docs_to_proc.append(f)
+    # Wyświetlamy subtelne info o plikach pod uploaderem
+    info = []
+    if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
+    if docs_to_proc: info.append(f"Dokumenty: {len(docs_to_proc)}")
+    if info: st.caption(" • ".join(info))
 
-with col_left:
-    uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
-    if uploaded:
-        for f in uploaded:
-            if f.name.endswith(('.mp3','.wav','.m4a')): audio_to_proc = f
-            else: docs_to_proc.append(f)
-        info = []
-        if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
-        if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
-        if info: st.caption(" | ".join(info))
+# 2. NOTATKA (Full width)
+pasted_text = st.text_area("notatki", height=120, placeholder="Wklej notatki, linki lub kontekst...", label_visibility="collapsed")
 
-    st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True)
-    start_gen = st.button("Generuj", use_container_width=True)
-
-with col_right:
-    pass 
+# 3. GENERUJ (Full width button)
+start_gen = st.button("Generuj", use_container_width=True, type="primary")
 
 # --- LOGIKA GENEROWANIA ---
 if start_gen:
