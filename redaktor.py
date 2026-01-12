@@ -5,12 +5,12 @@ import io
 # 1. KONFIGURACJA API
 try:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    # Zmieniono model na gemini-3 zgodnie z Twoją prośbą
-    model = genai.GenerativeModel('gemini-3') 
+    # POPRAWIONA NAZWA MODELU: gemini-3-pro-preview
+    model = genai.GenerativeModel('gemini-3-pro-preview') 
 except Exception as e:
     st.error(f"Błąd konfiguracji API: {e}")
 
-# Obsługa bibliotek do plików (PDF i DOCX)
+# Obsługa bibliotek do plików
 try:
     from docx import Document
     import PyPDF2
@@ -19,10 +19,10 @@ except ImportError:
     HAS_LIBS = False
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
-st.title("🖋️ Dziennikarz Master PRO v11.2")
+st.title("🖋️ Dziennikarz Master PRO v11.3")
 
 if not HAS_LIBS:
-    st.warning("⚠️ Brak bibliotek do czytania DOCX/PDF. Zainstaluj: pip install python-docx pypdf2")
+    st.warning("⚠️ Brak bibliotek DOCX/PDF. Zainstaluj: pip install python-docx pypdf2")
 
 # --- FUNKCJA CZYTANIA PLIKÓW ---
 def read_file(uploaded_file):
@@ -36,10 +36,10 @@ def read_file(uploaded_file):
             pdf_reader = PyPDF2.PdfReader(uploaded_file)
             return "\n".join([page.extract_text() for page in pdf_reader.pages])
     except Exception as e:
-        st.error(f"Błąd czytania pliku {uploaded_file.name}: {e}")
+        st.error(f"Błąd pliku {uploaded_file.name}: {e}")
     return ""
 
-# --- PANEL BOCZNY (USTAWIENIA) ---
+# --- PANEL BOCZNY ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
@@ -51,7 +51,7 @@ col1, col2 = st.columns(2)
 with col1:
     uploaded_files = st.file_uploader("Dodaj pliki źródłowe:", accept_multiple_files=True)
 with col2:
-    pasted_text = st.text_area("Wklej materiały pomocnicze:", height=150)
+    pasted_text = st.text_area("Lub wklej materiały tutaj:", height=150)
 
 all_source = pasted_text
 if uploaded_files:
@@ -67,7 +67,7 @@ if typ_tekstu == "Wywiad":
     NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid 1-2 zdania zaczynający się od 'O').
     KONSTRUKCJA: Q/A (P: ... O: ...) 6-12 bloków. 
     REDAKCJA: Usuń 'ja' w 99%, napraw neologizmy.
-    CEL: {target_chars} znaków (±300).
+    CEL DŁUGOŚCI: {target_chars} znaków ±300.
     """
 else:
     manifest = f"""
@@ -78,18 +78,36 @@ else:
     CYTATY: Ramka pauzowa (– Zdanie. –), min. 4 zdania cytatu.
     NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid).
     STRUKTURA: Relacja (3 twarde fakty w 1 akapicie).
-    CEL: {target_chars} znaków (±300).
+    CEL DŁUGOŚCI: {target_chars} znaków ±300.
     """
 
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
     if all_source.strip():
-        with st.spinner(f"Gemini 3 generuje {typ_tekstu}..."):
+        with st.spinner(f"Gemini 3 Pro pracuje..."):
             try:
                 full_prompt = f"{manifest}\n\nMATERIAŁY:\n{all_source}"
                 response = model.generate_content(full_prompt)
                 st.session_state.artykul = response.text
             except Exception as e:
-                st.error(f"Błąd API Gemini 3: {e}. Sprawdź, czy nazwa modelu jest poprawna dla Twojego regionu.")
+                # Wyświetli błąd jeśli model nadal nie jest dostępny w Twoim regionie
+                st.error(f"Błąd API Gemini 3 Pro: {e}")
+                st.info("Jeśli błąd 404 nadal występuje, spróbuj zamienić model na 'gemini-2.5-pro'.")
     else:
         st.error("Proszę dodać materiały źródłowe!")
+
+# --- WYNIKI I LICZNIK ---
+if "artykul" in st.session_state:
+    tekst = st.session_state.artykul
+    dlugosc = len(tekst)
+    roznica = dlugosc - target_chars
+    
+    st.divider()
+    # Delta_color="inverse" sprawia, że niedobór (minus) jest ZIELONY (jak na Twoim screenie)
+    st.metric(label="Liczba znaków", value=dlugosc, delta=f"{roznica} względem celu", delta_color="inverse")
+
+    st.subheader("Finalny tekst:")
+    # st.code zapewnia stabilny przycisk "Copy" w rogu ramki
+    st.code(tekst, language="markdown", wrap_lines=True)
+    
+    st.download_button(label="💾 Pobierz .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt", mime="text/plain")
