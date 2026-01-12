@@ -42,10 +42,10 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (MODERN MINIMALIST STYLE) ---
+# --- CSS (COMPACT & MODERN) ---
 st.markdown("""
 <style>
-    /* 1. TYPOGRAFIA NAGŁÓWKA */
+    /* 1. TYPOGRAFIA */
     h1 {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-weight: 200 !important;
@@ -59,65 +59,73 @@ st.markdown("""
         font-size: 12px;
         color: #666;
         margin-top: -10px;
-        margin-bottom: 30px;
+        margin-bottom: 20px;
     }
 
-    /* 2. STYLIZACJA FILE UPLOADER (MNIEJSZY) */
+    /* 2. KOMPAKTOWY FILE UPLOADER */
+    /* Zmniejszamy padding i wysokość kontenera uploadera */
+    [data-testid='stFileUploader'] {
+        margin-top: -25px; /* Podciągamy go trochę do góry */
+    }
     [data-testid='stFileUploader'] section {
-        padding: 15px !important; /* Mniejszy padding wewnątrz */
+        padding: 10px 15px !important; /* Bardzo mały padding */
         min-height: 0px !important;
-        background-color: #1a1c24; /* Ciemne tło */
-        border: 1px dashed #41444e;
+        background-color: #16181e; 
+        border: 1px dashed #333;
+        border-radius: 6px;
     }
     [data-testid='stFileUploader'] section:hover {
-        border-color: #777;
+        border-color: #666;
+        background-color: #1c1f26;
     }
-    /* Ukrycie niektórych domyślnych tekstów uploadera, żeby był czystszy */
-    [data-testid='stFileUploader'] .st-emotion-cache-1ae8axi {
-        font-size: 14px;
+    /* Ukrywamy ikonę 'cloud upload' żeby zaoszczędzić miejsce */
+    [data-testid='stFileUploader'] svg {
+        display: none;
+    }
+    /* Zmniejszamy tekst instrukcji drag & drop */
+    [data-testid='stFileUploader'] small {
+        display: none; /* Ukrywamy "Limit 200MB..." */
+    }
+    .st-emotion-cache-1ae8axi {
+        margin-bottom: 0px !important;
     }
 
-    /* 3. STYLIZACJA PRZYCISKU GENERUJ (BEZ CZERWIENI) */
-    /* Nadpisujemy domyślny styl przycisku */
+    /* 3. TEXT AREA (NOTATKI) */
+    /* Delikatne ramki dla notatek */
+    [data-testid="stTextArea"] textarea {
+        background-color: #16181e;
+        border: 1px solid #333;
+    }
+
+    /* 4. PRZYCISK GENERUJ */
     div.stButton > button {
-        background-color: #2b2d35; /* Ciemnoszary, neutralny */
+        background-color: #2b2d35;
         color: #ffffff;
         border: 1px solid #41444e;
         border-radius: 6px;
         font-size: 14px;
-        font-weight: 500;
-        padding: 0.4rem 1.2rem;
-        transition: all 0.2s ease-in-out;
-        box-shadow: none !important;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s;
+        margin-top: 2px; /* Wyrównanie optyczne z uploaderem */
+        height: 48px; /* Wymuszona wysokość, by pasował do uploadera */
     }
-    
     div.stButton > button:hover {
-        background-color: #ffffff; /* Biały po najechaniu - wysoki kontrast */
+        background-color: #ffffff;
         color: #000000;
         border-color: #ffffff;
-        transform: translateY(-1px);
     }
     
-    div.stButton > button:active {
-        transform: translateY(1px);
-    }
-
-    /* 4. HISTORIA I TEXTAREA */
+    /* 5. HISTORIA */
     div[data-testid="stCodeBlock"] {
         border: 1px solid #333;
         background-color: #0e1117;
     }
-    
-    /* Ukrycie przycisku deploy */
     .stDeployButton {display:none;}
-    
-    /* Sidebar buttons alignment */
     div[data-testid="stSidebar"] button { text-align: left; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- FUNKCJE POMOCNICZE ---
-# (Tutaj bez zmian w logice, tylko kod)
 
 def call_openai_gpt5(system_prompt, user_content):
     if not HAS_OPENAI: return "BŁĄD: Brak klucza OPENAI."
@@ -216,7 +224,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.2</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.3</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -277,50 +285,50 @@ with st.sidebar:
         st.button("Wyczyść wszystko", on_click=clear_all_history)
     else: st.caption("Pusto.")
 
-# --- GŁÓWNY INTERFEJS (MINIMALIST) ---
+# --- GŁÓWNY INTERFEJS (V17.3 LAYOUT) ---
 
-# Układ: 2 kolumny na input, ale inputy w jednej linii wizualnej
-col_input, col_meta = st.columns([3, 2])
+# 1. NOTATKI NA GÓRZE (PEŁNA SZEROKOŚĆ)
+pasted_text = st.text_area("Notatki / Kontekst:", height=100, placeholder="Wklej linki, notatki lub dodatkowe instrukcje...", label_visibility="visible")
+
+# 2. SEKCJA PLIKÓW I GENEROWANIA (DÓŁ)
+col_upload, col_btn = st.columns([5, 1]) # 5:1 proporcja, żeby przycisk był wąski
 
 audio_to_proc = None
 docs_to_proc = []
 
-with col_input:
-    # Uploader (Teraz mniejszy dzięki CSS)
-    uploaded = st.file_uploader("Materiały (Audio, Dokumenty):", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True)
+with col_upload:
+    # Uploader (jest teraz kompaktowy dzięki CSS wyżej)
+    uploaded = st.file_uploader("Dodaj pliki (Audio, Dokumenty):", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="visible")
+    
     if uploaded:
         for f in uploaded:
             if f.name.endswith(('.mp3','.wav','.m4a')): audio_to_proc = f
             else: docs_to_proc.append(f)
         
-        # Wyświetlamy małe podsumowanie co wgrano
+        # Małe info co wgrano
         info = []
         if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
         if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
-        if info: st.caption(" | ".join(info))
+        # if info: st.caption(" | ".join(info)) # Opcjonalne: ukryłem, bo widać w uploaderze nazwy plików
 
-with col_meta:
-    # Notatki
-    notes = st.text_area("Kontekst / Linki:", height=100, placeholder="Wklej linki lub dodatkowe uwagi...")
-    
-    # PRZYCISK GENERUJ - TERAZ PO PRAWEJ STRONIE, MNIEJSZY
-    # Używamy kolumn wewnątrz kolumny, żeby wyrównać go do prawej
-    _, btn_col = st.columns([1, 1])
-    with btn_col:
-        start_gen = st.button("Generuj materiał", use_container_width=True)
+with col_btn:
+    # Pusty element dla wyrównania w pionie (jeśli label uploadera jest widoczny)
+    st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
+    start_gen = st.button("Generuj", use_container_width=True)
 
 # --- LOGIKA GENEROWANIA ---
 if start_gen:
     
-    # 1. Przygotowanie danych
+    # 1. Przetwarzanie Notatek/Linków
     ctx = ""
-    if notes:
-        urls = extract_urls(notes)
+    if pasted_text:
+        urls = extract_urls(pasted_text)
         if urls:
-            with col_meta: st.info(f"Skanuję {len(urls)} linków...")
+            st.info(f"Skanuję {len(urls)} linków...")
             ctx += "--- WEB ---\n" + "\n".join([f"{u}\n{fetch_url_content(u)}" for u in urls])
-        ctx += f"\n--- INFO ---\n{notes}"
+        ctx += f"\n--- INFO ---\n{pasted_text}"
         
+    # 2. Przetwarzanie Plików Tekstowych
     src = ""
     if docs_to_proc:
         src = "\n".join([f"\n--- {f.name} ---\n{read_text_file(f)}" for f in docs_to_proc])
@@ -334,20 +342,24 @@ if start_gen:
     2. Treść pod separatorem ma mieć ok. {target_words} słów.
     """
 
-    # 2. Wykonanie
+    # 3. Wywołanie API
     with st.spinner("Przetwarzanie..."):
         try:
             if not src and not audio_to_proc:
-                st.error("Brak materiałów.")
+                st.error("Brak materiałów (pliki)!")
             else:
-                # GPT
+                # Ostrzeżenie o Audio+GPT
+                if model_choice.startswith("GPT") and audio_to_proc:
+                    st.toast("GPT nie obsługuje audio. Przełączam na Gemini.", icon="⚠️")
+                
+                # GPT (Text Only)
                 if model_choice.startswith("GPT") and HAS_OPENAI and not audio_to_proc:
                     full_p = f"{manifest}\n\nKONTEKST:\n{ctx}\n\nMATERIAŁ:\n{src}\n\n{instruction}"
                     res = call_openai_gpt5("Redaktor", full_p)
                     st.session_state.artykul = res
                     add_to_history(res, typ_tekstu, "GPT-5.2")
                     st.rerun()
-                # GEMINI
+                # GEMINI (Text + Audio)
                 else:
                     payload = [manifest]
                     if ctx: payload.append(f"KONTEKST:\n{ctx}")
@@ -369,9 +381,7 @@ if start_gen:
 
 # --- WYNIK ---
 if "artykul" in st.session_state:
-    st.markdown("---") # Subtelna linia oddzielająca
+    st.markdown("---")
     st.markdown("### Wynik")
     st.code(st.session_state.artykul, language="markdown", wrap_lines=True)
-    
-    # Przycisk pobierania - też minimalistyczny (bez use_container_width)
     st.download_button("Pobierz .txt", data=st.session_state.artykul, file_name=f"{typ_tekstu.lower()}.txt")
