@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (HARDCORE CUSTOMIZATION) ---
+# --- CSS ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -89,46 +89,28 @@ st.markdown("""
     div.stButton > button:hover { background-color: #ffffff; color: #000000; border-color: #ffffff; }
 
     /* 4. HISTORIA - TITLE BUTTON */
-    /* Ucinanie tekstu */
     [data-testid="stSidebar"] div.stButton > button p {
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        width: 100%; display: block;
+        white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; width: 100%; display: block;
     }
-    /* Mniejszy padding dla głównego przycisku w historii */
     [data-testid="stSidebar"] div.stButton > button {
-        padding: 0.25rem 0.5rem !important;
-        font-size: 13px !important;
-        text-align: left !important;
-        border: 1px solid #333;
+        padding: 0.25rem 0.5rem !important; font-size: 13px !important; text-align: left !important; border: 1px solid #333;
     }
 
-    /* 5. HISTORIA - PRZYCISK X (BARDZO WAŻNE) */
-    /* Celujemy w przycisk, który jest wewnątrz naszego containera .x-btn */
+    /* 5. HISTORIA - PRZYCISK X */
     div[data-testid="column"] button.x-style {
-        background: transparent !important;
-        border: none !important;
-        color: #555 !important;
-        padding: 0px !important;
-        font-size: 18px !important;
-        line-height: 1 !important;
-        height: auto !important;
-        min-height: 0px !important;
-        margin-top: 4px !important;
-        width: auto !important;
+        background: transparent !important; border: none !important; color: #555 !important;
+        padding: 0px !important; font-size: 18px !important; line-height: 1 !important;
+        height: auto !important; min-height: 0px !important; margin-top: 4px !important; width: auto !important;
     }
-    div[data-testid="column"] button.x-style:hover {
-        color: #ef5350 !important;
-        background: transparent !important;
-        border: none !important;
-    }
-    div[data-testid="column"] button.x-style:active {
-        background: transparent !important;
-        border: none !important;
+    div[data-testid="column"] button.x-style:hover { color: #ef5350 !important; }
+    div[data-testid="column"] button.x-style:active { background: transparent !important; }
+
+    /* 6. EXPANDER STYLING (HISTORIA) */
+    /* Zmniejszenie paddingu wewnątrz expandera */
+    [data-testid="stExpanderDetails"] {
+        padding-left: 0.5rem; padding-right: 0.5rem;
     }
 
-    /* Ukrycie deploy */
     div[data-testid="stCodeBlock"] { border: 1px solid #333; background-color: #0e1117; }
     .stDeployButton {display:none;}
 </style>
@@ -232,7 +214,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.9</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.10</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -271,39 +253,30 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # HISTORIA (V17.9 - TYTUŁ + X W JEDNEJ LINII)
     st.divider()
-    st.subheader("Historia")
-    if st.session_state.history:
-        for i, item in enumerate(st.session_state.history):
-            
-            # Kolumny: Szeroki Tytuł (85%) | Wąski X (15%)
-            c_title, c_del = st.columns([6, 1], gap="small")
-            
-            with c_title:
-                if st.button(item.get('title','Bez tytułu'), key=f"l{i}", use_container_width=True):
-                    st.session_state.artykul = item['content']
-                    st.rerun()
-            
-            with c_del:
-                # Używamy tricku z klasą 'x-style' zdefiniowaną w CSS wyżej
-                # Znak '×' (multiplication sign) wygląda lepiej niż 'x'
-                def on_del_click(idx=i):
-                    delete_history_item(idx)
-                    
-                st.button("×", key=f"d{i}", on_click=on_del_click, type="secondary")
-                # CSS nadpisze wygląd tego przycisku (klasa button.x-style nie działa wprost na st.button bez JS,
-                # ale użyliśmy selektora div[data-testid="column"] button w CSS, który zadziała na ten mały guzik)
+    
+    # HISTORIA (ZWINIĘTA W EXPANDER)
+    with st.expander("Historia", expanded=False):
+        if st.session_state.history:
+            for i, item in enumerate(st.session_state.history):
+                c_title, c_del = st.columns([6, 1], gap="small")
+                with c_title:
+                    if st.button(item.get('title','Bez tytułu'), key=f"l{i}", use_container_width=True):
+                        st.session_state.artykul = item['content']
+                        st.rerun()
+                with c_del:
+                    def on_del_click(idx=i): delete_history_item(idx)
+                    st.button("×", key=f"d{i}", on_click=on_del_click, type="secondary") # CSS zrobi resztę
 
-            # Metadata pod spodem
-            st.markdown(f"""
-            <div style='font-size: 10px; color: #666; margin-top: -14px; margin-bottom: 8px; margin-left: 2px;'>
-                {item.get('type','AI')} | {item['time']}
-            </div>
-            """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style='font-size: 10px; color: #666; margin-top: -14px; margin-bottom: 8px; margin-left: 2px;'>
+                    {item.get('type','AI')} | {item['time']}
+                </div>
+                """, unsafe_allow_html=True)
             
-        st.button("Wyczyść wszystko", on_click=clear_all_history)
-    else: st.caption("Pusto.")
+            st.button("Wyczyść wszystko", on_click=clear_all_history)
+        else:
+            st.caption("Pusto.")
 
 # --- GŁÓWNY INTERFEJS ---
 
