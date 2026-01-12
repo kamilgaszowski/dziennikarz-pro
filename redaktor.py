@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (FINAL CONTAINER FIX) ---
+# --- CSS (ACTION BUTTONS STYLE) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,49 +62,50 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER - FIX WYSOKOŚCI I PADDINGU */
+    /* 2. UPLOADER */
     [data-testid='stFileUploader'] {
         margin-top: 10px;
-        margin-bottom: 30px !important; /* Odstęp od notatek */
+        margin-bottom: 30px !important;
         max-width: 500px; 
         margin-left: 0px !important;
         margin-right: auto;
     }
-    
-    /* Stylizacja ramki */
     [data-testid='stFileUploader'] section {
-        /* KLUCZOWE: DUŻY PADDING DOLNY, ŻEBY OBJĄĆ PRZYCISK */
         padding: 20px 20px 60px 20px !important;
-        
         background-color: #16181e; 
         border: 1px dashed #333; 
         border-radius: 6px;
-        
         text-align: left !important;
         align-items: flex-start !important;
         display: flex;
         flex-direction: column;
-        
-        /* WYMUSZENIE WYSOKOŚCI */
         height: auto !important;
         min-height: 140px !important; 
     }
-    
     [data-testid='stFileUploader'] section:hover {
         border-color: #666;
         background-color: #1c1f26;
     }
     [data-testid='stFileUploader'] svg { display: none; }
-    
     .st-emotion-cache-1ae8axi { margin-bottom: 0px !important; }
 
-    /* 3. BUTTONY GŁÓWNE */
-    div.stButton > button {
-        background-color: #2b2d35; color: #ffffff; border: 1px solid #41444e;
-        border-radius: 4px; font-size: 14px; padding: 0.5rem 1rem; width: 100%;
+    /* 3. BUTTONY (ZWYKŁE I DOWNLOAD) */
+    /* Targetujemy oba typy przycisków, żeby wyglądały tak samo */
+    div.stButton > button, div.stDownloadButton > button {
+        background-color: #2b2d35; 
+        color: #ffffff; 
+        border: 1px solid #41444e;
+        border-radius: 4px; 
+        font-size: 14px; 
+        padding: 0.5rem 1rem; 
+        width: 100%;
         margin-top: 5px;
     }
-    div.stButton > button:hover { background-color: #ffffff; color: #000000; border-color: #ffffff; }
+    div.stButton > button:hover, div.stDownloadButton > button:hover { 
+        background-color: #ffffff; 
+        color: #000000; 
+        border-color: #ffffff; 
+    }
 
     /* 4. TEXT AREA */
     [data-testid="stTextArea"] textarea {
@@ -230,7 +231,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.18</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.19</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -377,4 +378,21 @@ if "artykul" in st.session_state:
     st.markdown("---")
     st.markdown("### Wynik")
     st.code(st.session_state.artykul, language="markdown", wrap_lines=True)
-    st.download_button("Pobierz .txt", data=st.session_state.artykul, file_name=f"{typ_tekstu.lower()}.txt")
+    
+    # 4. PRZYCISKI AKCJI (POD KODEM)
+    c_copy, c_download = st.columns([1, 1])
+    
+    with c_copy:
+        # Przycisk Kopiuj (Symulacja UI)
+        if st.button("Kopiuj", use_container_width=True):
+            st.toast("Skopiowano do schowka!", icon="📋")
+            
+    with c_download:
+        # Przycisk Pobierz (Bez .txt w labelu)
+        st.download_button(
+            label="Pobierz",
+            data=st.session_state.artykul,
+            file_name=f"{typ_tekstu.lower()}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
