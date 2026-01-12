@@ -20,8 +20,7 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- CSS: MAGICZNY ATRYBUT FIXED/STICKY ---
-# To jest kluczowa zmiana. Wymuszamy na bloku kodu zachowanie "okna".
+# --- CSS: MAGICZNY ATRYBUT FIXED/STICKY (Z Twojego pliku) ---
 st.markdown("""
 <style>
     /* Namierzamy kontener kodu Streamlit */
@@ -38,7 +37,7 @@ st.markdown("""
         background-color: #0e1117;
     }
 
-    /* Opcjonalnie: Stylizacja paska przewijania, żeby był ładny */
+    /* Opcjonalnie: Stylizacja paska przewijania */
     div[data-testid="stCodeBlock"]::-webkit-scrollbar {
         width: 12px;
     }
@@ -50,16 +49,13 @@ st.markdown("""
         border-radius: 10px;
         border: 2px solid #0e1117;
     }
-    div[data-testid=" stCodeCopyButton"] {
-        position: fixed;
-    }
     
     /* Ukrycie zbędnych przycisków Streamlit, zostaje tylko Copy */
     .stDeployButton {display:none;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v13.2")
+st.title("🖋️ Dziennikarz Master PRO v13.4")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -85,7 +81,7 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     st.divider()
-    st.caption("v13.2 | CSS Fixed Scroll")
+    st.caption("v13.4 | Pełne Manifesty")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -101,12 +97,77 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY (PEŁNE) ---
-strict_length = f"CEL: {target_chars} znaków netto (bez enterów)."
+# --- SZCZEGÓŁOWE MANIFESTY (Z TWOICH PLIKÓW) ---
+
+# 1. INSTRUKCJA DLA WYWIADU
+manifest_wywiad = f"""
+Jesteś redaktorem Master PRO. Tworzysz WYWIAD w formie Q/A.
+Twoim zadaniem jest redagować materiał źródłowy, nie dodając treści spoza niego, ale dbając o najwyższą jakość językową.
+
+PARAMETRY TECHNICZNE:
+- Docelowa długość: ok. {target_chars} znaków netto (bez spacji/enterów).
+- Jeśli materiału jest dużo, selekcjonuj najważniejsze wątki.
+- Jeśli materiału jest mało, zachowaj każdy szczegół.
+
+ZASADY REDAKCJI (MANIFEST):
+1. ZAKAZ METAJĘZYKA: Nie używaj sformułowań typu "w tej rozmowie", "pada przykład", "wróćmy do", "mówiłaś o...". Pytania mają brzmieć jak bezpośredni zwrot (2. osoba).
+2. ANTY-KOMPRESJA: Nie spłaszczaj wypowiedzi do streszczeń. Zachowuj sceny, przykłady, dopowiedzenia. Skracaj tylko powtórzenia i dygresje techniczne.
+3. PYTANIA: Mniej pytań, ale głębsze. Nie tnij odpowiedzi tylko po to, by było krócej.
+4. REDAKCJA JĘZYKA: Wygładzaj język mówiony do wersji "do druku". Usuwaj nadmiarowe "ja" tam, gdzie wystarczy czasownik. Poprawiaj składnię.
+5. STRUKTURA: Q/A. Pytania pogrubione.
+6. FORMATOWANIE:
+   - NAGŁÓWKI: Przygotuj zestaw: Nadtytuł, Tytuł (max 3 słowa), Lid (1-2 zdania). Lid musi zaczynać się od słowa "O".
+   - KOTWICE I PEREŁKI: Na samym końcu wylistuj najmocniejsze cytaty ("perełki").
+
+ZAKAZY:
+- Nie dopisuj faktów, nazwisk ani liczb spoza źródła.
+- Nie używaj słowa "kapłan" (zastąp: ksiądz, duchowny, duszpasterz).
+
+Twoim celem jest tekst gotowy do druku.
+"""
+
+# 2. INSTRUKCJA DLA NEWS / REPORTAŻ / ARTYKUŁ
+manifest_news = f"""
+Jesteś redaktorem prasowym Master PRO. Tworzysz ARTYKUŁ / RELACJĘ (News lub Reportaż).
+Pracujesz wyłącznie na materiale źródłowym.
+
+PARAMETRY TECHNICZNE:
+- Docelowa długość: ok. {target_chars} znaków netto.
+
+STRUKTURA I NAGŁÓWKI:
+- Na początku: Nadtytuł, Tytuł (max 3 słowa), Lid.
+- Automatycznie dodaj też 5 propozycji alternatywnych tytułów i 3 propozycji lidów.
+- ZAKAZ powtórzeń słów między nadtytułem, tytułem i lidem.
+- Lid i pierwszy akapit NIE mogą zaczynać się od daty.
+
+STYL:
+- Styl reporterski, precyzyjny. Bez klisz i zdań pustych treściowo.
+- ZAKAZ: "te słowa pokazują", "w tych zdaniach streszcza się".
+- ZAKAZ: Średników (;) i dwukropków (:).
+- ZAKAZ: Myślników w tekście własnym (chyba że w cytacie).
+
+CYTATY - REGUŁY ŻELAZNE:
+1. FORMAT: Cytaty zapisuj BEZ CUDZYSŁOWÓW. Używaj formatu z pauzami.
+   Wzór: – Treść cytatu. Treść cytatu. – atrybucja (mówi/dodaje).
+2. DŁUGOŚĆ: Każdy cytat musi mieć MINIMUM 4 zdania.
+3. KONTEKST: Przed każdym cytatem MINIMUM 3 zdania wprowadzające. Po każdym cytacie MINIMUM 3 zdania rozwinięcia.
+4. GĘSTOŚĆ: Celuj w jeden cytat na akapit.
+5. INTERPUNKCJA: Cytat kończy się bez kropki wewnątrz pauz. Kropka dopiero po atrybucji.
+   Przykład: – To jest ważne zdanie. To kolejne. – zaznacza rozmówca.
+
+SŁOWNICTWO:
+- ABSOLUTNY ZAKAZ słowa "kapłan" i jego odmian.
+
+ZAKOŃCZENIE:
+- Domknij konkretem lub cytatem. Bez ogólnych refleksji.
+"""
+
+# Wybór odpowiedniego manifestu
 if typ_tekstu == "Wywiad":
-    manifest = f"TRYB wywiad. {strict_length} Redaguj Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów (nadtytuł, tytuł, lid na 'O')."
+    manifest = manifest_wywiad
 else:
-    manifest = f"TRYB article/news. {strict_length} Redaktor prasowy. Rdzeń: 2/3 treści ze źródła. Cytaty w ramce pauzowej. Zakaz słowa 'kapłan'."
+    manifest = manifest_news
+
 
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
