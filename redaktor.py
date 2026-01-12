@@ -4,6 +4,7 @@ import time
 import io
 import json
 import os
+import re
 from datetime import datetime
 
 # 1. KONFIGURACJA API
@@ -26,11 +27,30 @@ st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", lay
 # --- TRWAŁA HISTORIA ---
 HISTORY_FILE = "historia_redaktora.json"
 
+def extract_title_from_text(text):
+    """Próbuje wyciągnąć tytuł z tekstu do wyświetlania w historii."""
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    # 1. Szukamy linii zaczynającej się wprost od "Tytuł:"
+    for line in lines[:10]:
+        if line.lower().startswith("tytuł:") or line.lower().startswith("tytuł"):
+            return line.split(":", 1)[-1].strip().replace("*", "")
+    # 2. Jeśli nie ma etykiety, zakładamy, że 2. linia to tytuł (bo 1. to nadtytuł)
+    if len(lines) >= 2:
+        return lines[1].replace("#", "").replace("*", "").strip()
+    # 3. Fallback
+    if lines:
+        return lines[0].replace("#", "").replace("*", "").strip()[:50] + "..."
+    return "Bez tytułu"
+
 def load_history_from_disk():
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                for item in data:
+                    if "title" not in item:
+                        item["title"] = extract_title_from_text(item["content"])
+                return data
         except: return []
     return []
 
@@ -41,7 +61,20 @@ def save_history_to_disk(history_list):
 if "history" not in st.session_state:
     st.session_state.history = load_history_from_disk()
 
-# --- CSS: FIXED SCROLL & STICKY HEADER ---
+def add_to_history(text, type_label):
+    timestamp = datetime.now().strftime("%d-%m %H:%M")
+    extracted_title = extract_title_from_text(text)
+    entry = {
+        "time": timestamp,
+        "type": type_label,
+        "content": text,
+        "chars": len(text.replace("\n", "").replace("\r", "")),
+        "title": extracted_title
+    }
+    st.session_state.history.insert(0, entry)
+    save_history_to_disk(st.session_state.history)
+
+# --- CSS ---
 st.markdown("""
 <style>
     div[data-testid="stCodeBlock"] {
@@ -63,10 +96,11 @@ st.markdown("""
         border: 2px solid #0e1117;
     }
     .stDeployButton {display:none;}
+    .history-item { padding: 10px 0; border-bottom: 1px solid #31333f; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v13.7")
+st.title("🖋️ Dziennikarz Master PRO v13.9")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -85,17 +119,6 @@ def read_text_file(uploaded_file):
     except: return ""
     return ""
 
-def add_to_history(text, type_label):
-    timestamp = datetime.now().strftime("%d-%m %H:%M")
-    entry = {
-        "time": timestamp,
-        "type": type_label,
-        "content": text,
-        "chars": count_net_chars(text)
-    }
-    st.session_state.history.insert(0, entry)
-    save_history_to_disk(st.session_state.history)
-
 # --- PANEL BOCZNY ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
@@ -104,14 +127,16 @@ with st.sidebar:
     
     st.divider()
     st.subheader("🗄️ Historia (Trwała)")
+    
     if len(st.session_state.history) > 0:
         for i, item in enumerate(st.session_state.history):
-            btn_key = f"hist_{i}_{item['time']}"
-            label = f"{item['time']} | {item['type']} ({item['chars']})"
-            if st.button(label, key=btn_key):
-                st.session_state.artykul = item['content']
-                st.rerun()
-        st.markdown("---")
+            with st.container():
+                st.markdown(f"**{item.get('title', 'Bez tytułu')}**")
+                st.caption(f"{item['type']} | {item['time']} | {item['chars']} zn.")
+                if st.button("📂 Wczytaj", key=f"rest_{i}_{item['time']}"):
+                    st.session_state.artykul = item['content']
+                    st.rerun()
+                st.markdown("---")
         if st.button("🗑️ Usuń wszystko"):
             st.session_state.history = []
             save_history_to_disk([])
@@ -133,9 +158,9 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- PEŁNE MANIFESTY (WKLEJONE 1:1) ---
+# --- PEŁNE MANIFESTY (100% ORYGINAŁU) ---
 
-# PEŁNY TEKST Z PLIKU Wywiad_manifest.txt
+# 1. WYWIAD
 manifest_wywiad_full = f"""
 JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE WYWIADU.
 DOCELOWA DŁUGOŚĆ TEKSTU: ok. {target_chars} znaków netto (bez spacji/enterów).
@@ -203,10 +228,9 @@ Checklista przed wysyłką wywiadu:
 [ ] Redakcja wypowiedzi rozmówcy jest do wersji „do druku” bez zmiany sensu, z poprawą składni i interpunkcji
 [ ] Usunięte są wypełniacze i nadmiarowe „ja” wszędzie tam, gdzie wystarcza czasownik
 [ ] Zwracam jedną spójną wersję ciągłą.
-[ ] Po tekście głównym dodaję sekcję „KOTWICE I PEREŁKI” – listę 3-5 najmocniejszych cytatów z rozmowy.
 """
 
-# PEŁNY TEKST Z PLIKU News_manifest.txt
+# 2. NEWS / REPORTAŻ
 manifest_news_full = f"""
 JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE ARTYKUŁU / RELACJI.
 DOCELOWA DŁUGOŚĆ TEKSTU: ok. {target_chars} znaków netto (bez spacji/enterów).
@@ -269,11 +293,9 @@ Checklista przed wysyłką artykułu:
 [ ] Nie ma słowa „kapłan”
 """
 
-# Wybór manifestu
 if typ_tekstu == "Wywiad":
     manifest = manifest_wywiad_full
 else:
-    # Dla News i Reportażu używamy manifestu newsowego
     manifest = manifest_news_full
 
 # --- GENEROWANIE ---
@@ -309,8 +331,7 @@ if "artykul" in st.session_state:
     
     if c1.button("✂️ Skróć 20%"):
         with st.spinner("Skracam..."):
-            # Przy skracaniu też przypominamy kluczowe zasady
-            prompt_short = f"Skróć ten tekst o 20% (cel: {int(netto*0.8)} znaków), ale zachowaj strukturę i ZAKAZ słowa 'kapłan':\n\n{tekst}"
+            prompt_short = f"Skróć o 20% (cel: {int(netto*0.8)}), ale zachowaj checklistę:\n\n{tekst}"
             res = model.generate_content(prompt_short)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Skrót)")
@@ -318,7 +339,7 @@ if "artykul" in st.session_state:
             
     if c2.button("➕ Wydłuż 20%"):
         with st.spinner("Wydłużam..."):
-            prompt_long = f"Wydłuż ten tekst o 20% (cel: {int(netto*1.2)} znaków), dodając detale z kontekstu, ale trzymaj się ZAKAZÓW (brak cudzysłowów w cytatach):\n\n{tekst}"
+            prompt_long = f"Wydłuż o 20% (cel: {int(netto*1.2)}), ale zachowaj checklistę:\n\n{tekst}"
             res = model.generate_content(prompt_long)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
