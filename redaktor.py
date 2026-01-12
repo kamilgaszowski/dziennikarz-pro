@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (HARDCORE CUSTOMIZATION) ---
+# --- CSS ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,72 +62,36 @@ st.markdown("""
         margin-bottom: 20px;
     }
 
-    /* 2. ZMIANA TEKSTÓW W UPLOADERZE (CSS HACK) */
+    /* 2. UPLOADER */
     [data-testid='stFileUploader'] section > div:first-child span { display: none; }
     [data-testid='stFileUploader'] section > div:first-child small { display: none; }
     
     [data-testid='stFileUploader'] section > div:first-child::before {
         content: "Importuj";
-        display: block;
-        text-align: center;
-        font-weight: 600;
-        font-size: 16px;
-        color: #e0e0e0;
-        margin-bottom: 5px;
+        display: block; text-align: center; font-weight: 600; font-size: 16px; color: #e0e0e0; margin-bottom: 5px;
     }
-    
     [data-testid='stFileUploader'] section > div:first-child::after {
         content: "Limit 200MB • TXT, PDF, DOCX, MP3, WAV, M4A";
-        display: block;
-        text-align: center;
-        font-size: 11px;
-        color: #666;
+        display: block; text-align: center; font-size: 11px; color: #666;
     }
-
     [data-testid='stFileUploader'] section {
         padding: 20px 10px !important;
-        background-color: #16181e; 
-        border: 1px dashed #444;
-        border-radius: 6px;
+        background-color: #16181e; border: 1px dashed #444; border-radius: 6px;
     }
-    [data-testid='stFileUploader'] section:hover {
-        border-color: #888;
-        background-color: #1c1f26;
-    }
+    [data-testid='stFileUploader'] section:hover { border-color: #888; background-color: #1c1f26; }
     [data-testid='stFileUploader'] svg { display: none; }
 
-    /* 3. PRZYCISK GENERUJ */
+    /* 3. BUTTON */
     div.stButton > button {
-        background-color: #2b2d35;
-        color: #ffffff;
-        border: 1px solid #41444e;
-        border-radius: 6px;
-        font-size: 14px;
-        padding: 0.5rem 1rem;
-        width: 100%;
+        background-color: #2b2d35; color: #ffffff; border: 1px solid #41444e;
+        border-radius: 6px; font-size: 14px; padding: 0.5rem 1rem; width: 100%;
     }
-    div.stButton > button:hover {
-        background-color: #ffffff;
-        color: #000000;
-        border-color: #ffffff;
-    }
+    div.stButton > button:hover { background-color: #ffffff; color: #000000; border-color: #ffffff; }
 
     /* 4. HISTORIA */
-    div[data-testid="stCodeBlock"] {
-        border: 1px solid #333;
-        background-color: #0e1117;
-    }
+    div[data-testid="stCodeBlock"] { border: 1px solid #333; background-color: #0e1117; }
     .stDeployButton {display:none;}
     div[data-testid="stSidebar"] button { text-align: left; }
-    
-    /* 5. METRYKA W SIDEBARZE */
-    [data-testid="stMetric"] {
-        background-color: #1a1c24;
-        padding: 10px;
-        border-radius: 6px;
-        border: 1px solid #333;
-        margin-top: 10px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -229,11 +193,11 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.5</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.6</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
-# --- SIDEBAR (ZINTEGROWANY STATUS) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("Ustawienia")
     model_choice = st.radio("Silnik AI:", ["Gemini 3 Pro", "GPT-5.2 (OpenAI)"])
@@ -242,24 +206,37 @@ with st.sidebar:
     st.divider()
     typ_tekstu = st.radio("Rodzaj:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     
-    # SUWAK I STATUS W JEDNYM BLOKU
+    # SUWAK
     target_chars = st.slider("Cel znaków (treść):", 500, 15000, value=3500, step=500)
     target_words = int(target_chars / 7)
     st.caption(f"Cel: ~{target_words} słów.")
 
-    # TU JEST NOWY, CZYSTY STATUS POD SUWAKIEM
+    # NOWY STATUS (Custom HTML - mniejszy font, bez "zn.")
     current_text = st.session_state.get("artykul", "")
+    
+    netto = 0
+    diff_html = ""
     
     if current_text:
         netto = count_body_chars_only(current_text)
         diff = netto - target_chars
-        # Koloryzacja: czerwony jeśli duża różnica (>300 zn), normalny jeśli ok
-        delta_color = "normal" if abs(diff) < 300 else "inverse"
         
-        # Wyświetlanie metryki
-        st.metric(label="Obecna długość (netto):", value=f"{netto} zn.", delta=f"{diff} vs cel", delta_color=delta_color)
+        # Kolor różnicy (zielonkawy jeśli blisko celu, czerwonawy jeśli daleko)
+        color = "#66bb6a" if abs(diff) < 300 else "#ef5350"
+        sign = "+" if diff > 0 else ""
+        diff_html = f'<span style="color: {color}; margin-left: 8px; font-size: 12px;">{sign}{diff}</span>'
     else:
-        st.metric(label="Obecna długość (netto):", value="0 zn.", delta="oczekiwanie")
+        diff_html = '<span style="color: #666; margin-left: 8px; font-size: 12px;">...</span>'
+
+    # Renderowanie własnego boksu statusu
+    st.markdown(f"""
+    <div style="background-color: #16181e; border: 1px solid #333; border-radius: 6px; padding: 10px; margin-top: 5px;">
+        <p style="margin: 0; font-size: 11px; color: #888; text-transform: uppercase;">Obecna długość (netto)</p>
+        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #e0e0e0; font-family: monospace;">
+            {netto} {diff_html}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # HISTORIA
     st.divider()
@@ -288,7 +265,6 @@ audio_to_proc = None
 docs_to_proc = []
 
 with col_left:
-    # 2.1 UPLOADER (Wąski, ze zmienionym tekstem CSS)
     uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
     
     if uploaded:
@@ -301,7 +277,6 @@ with col_left:
         if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
         if info: st.caption(" | ".join(info))
 
-    # 2.2 PRZYCISK GENERUJ
     st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True)
     start_gen = st.button("Generuj", use_container_width=True)
 
@@ -310,8 +285,6 @@ with col_right:
 
 # --- LOGIKA GENEROWANIA ---
 if start_gen:
-    
-    # 1. Przetwarzanie Notatek/Linków
     ctx = ""
     if pasted_text:
         urls = extract_urls(pasted_text)
@@ -320,7 +293,6 @@ if start_gen:
             ctx += "--- WEB ---\n" + "\n".join([f"{u}\n{fetch_url_content(u)}" for u in urls])
         ctx += f"\n--- INFO ---\n{pasted_text}"
         
-    # 2. Przetwarzanie Plików Tekstowych
     src = ""
     if docs_to_proc:
         src = "\n".join([f"\n--- {f.name} ---\n{read_text_file(f)}" for f in docs_to_proc])
@@ -334,7 +306,6 @@ if start_gen:
     2. Treść pod separatorem ma mieć ok. {target_words} słów.
     """
 
-    # 3. Wywołanie API
     with st.spinner("Przetwarzanie..."):
         try:
             if not src and not audio_to_proc:
