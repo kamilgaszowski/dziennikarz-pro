@@ -2,7 +2,9 @@ import streamlit as st
 import google.generativeai as genai
 import time
 import io
-from datetime import datetime # Do oznaczania czasu w historii
+import json
+import os
+from datetime import datetime
 
 # 1. KONFIGURACJA API
 try:
@@ -21,14 +23,31 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- INICJALIZACJA HISTORII ---
-if "history" not in st.session_state:
-    st.session_state.history = []
+# --- TRWAŁA HISTORIA (Nowość v13.6) ---
+HISTORY_FILE = "historia_redaktora.json"
 
-# --- CSS: MAGICZNY ATRYBUT FIXED/STICKY ---
+def load_history_from_disk():
+    """Ładuje historię z pliku JSON przy starcie."""
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+def save_history_to_disk(history_list):
+    """Zapisuje całą historię do pliku JSON."""
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history_list, f, ensure_ascii=False, indent=4)
+
+# Inicjalizacja stanu (ładujemy z dysku, jeśli session_state jest pusty)
+if "history" not in st.session_state:
+    st.session_state.history = load_history_from_disk()
+
+# --- CSS: FIXED SCROLL (To co działało w v13.2) ---
 st.markdown("""
 <style>
-    /* Namierzamy kontener kodu Streamlit */
     div[data-testid="stCodeBlock"] {
         max-height: 75vh !important; 
         overflow-y: auto !important;
@@ -36,8 +55,6 @@ st.markdown("""
         border-radius: 8px;
         background-color: #0e1117;
     }
-
-    /* Pasek przewijania */
     div[data-testid="stCodeBlock"]::-webkit-scrollbar {
         width: 12px;
     }
@@ -49,12 +66,11 @@ st.markdown("""
         border-radius: 10px;
         border: 2px solid #0e1117;
     }
-    
     .stDeployButton {display:none;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v13.5")
+st.title("🖋️ Dziennikarz Master PRO v13.6")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -74,16 +90,18 @@ def read_text_file(uploaded_file):
     return ""
 
 def add_to_history(text, type_label):
-    """Dodaje tekst do historii sesji"""
-    timestamp = datetime.now().strftime("%H:%M")
+    """Dodaje wpis do RAM i na Dysk."""
+    timestamp = datetime.now().strftime("%d-%m %H:%M") # Dodano datę
     entry = {
         "time": timestamp,
         "type": type_label,
         "content": text,
         "chars": count_net_chars(text)
     }
-    # Dodajemy na początek listy (najnowsze na górze)
+    # 1. Dodaj do sesji (RAM)
     st.session_state.history.insert(0, entry)
+    # 2. Zapisz na dysk (TRWAŁOŚĆ)
+    save_history_to_disk(st.session_state.history)
 
 # --- PANEL BOCZNY ---
 with st.sidebar:
@@ -91,24 +109,27 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     
-    # --- SEKCJA HISTORII W PASEKU BOCZNYM ---
+    # --- HISTORIA (TRWAŁA) ---
     st.divider()
-    st.subheader("🗄️ Historia sesji")
+    st.subheader("🗄️ Historia (Trwała)")
     
     if len(st.session_state.history) > 0:
         for i, item in enumerate(st.session_state.history):
-            # Przycisk dla każdego wpisu w historii
-            label = f"{item['time']} | {item['type']} ({item['chars']} zn.)"
-            if st.button(label, key=f"hist_{i}"):
-                # Przywracanie tekstu
+            # Unikalny klucz przycisku
+            btn_key = f"hist_{i}_{item['time']}"
+            label = f"{item['time']} | {item['type']} ({item['chars']})"
+            
+            if st.button(label, key=btn_key):
                 st.session_state.artykul = item['content']
                 st.rerun()
         
-        if st.button("🗑️ Wyczyść historię"):
+        st.markdown("---")
+        if st.button("🗑️ Usuń wszystko (trwale)"):
             st.session_state.history = []
+            save_history_to_disk([]) # Czyścimy plik
             st.rerun()
     else:
-        st.caption("Brak zapisanych tekstów w tej sesji.")
+        st.caption("Historia jest pusta.")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -124,25 +145,29 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY ---
+# --- MANIFESTY (PEŁNE Z TWOICH PLIKÓW) ---
 manifest_wywiad = f"""
 Jesteś redaktorem Master PRO. Tworzysz WYWIAD w formie Q/A.
-ZASADY:
-- Docelowa długość: ok. {target_chars} znaków netto.
-- ZAKAZ METAJĘZYKA (np. "w tej rozmowie"). Pytania w 2. osobie.
-- ANTY-KOMPRESJA: Nie spłaszczaj wypowiedzi. Zachowuj sceny i przykłady.
-- REDAKCJA: Wygładzaj język mówiony, usuwaj nadmiarowe "ja".
-- STRUKTURA: Q/A. Nagłówki: Nadtytuł, Tytuł, Lid (na "O").
-- ZAKAZ słowa "kapłan".
+ZASADY (Baza + Twoje Manifesty):
+- Cel: ok. {target_chars} znaków netto.
+- ZAKAZ METAJĘZYKA (np. "w tej rozmowie", "pada przykład", "wróćmy do"). Pytania jako bezpośredni zwrot (2. osoba).
+- ANTY-KOMPRESJA: Zachowuj sceny, przykłady, dopowiedzenia. Nie spłaszczaj do streszczeń.
+- REDAKCJA: Język mówiony -> pisany (bez zmiany sensu). Usuń "yyy", powtórzenia i nadmiarowe "ja".
+- STRUKTURA: Q/A. Nagłówki: Nadtytuł, Tytuł (max 3 słowa), Lid (na "O").
+- KOTWICE: Na końcu wylistuj "perełki" (najmocniejsze cytaty).
+- ZAKAZ słowa "kapłan" (używaj: ksiądz, duchowny etc.).
 """
 
 manifest_news = f"""
-Jesteś redaktorem Master PRO. Tworzysz ARTYKUŁ / RELACJĘ.
-ZASADY:
-- Docelowa długość: ok. {target_chars} znaków netto.
-- STRUKTURA: Nadtytuł, Tytuł, Lid + propozycje. Lid nie od daty.
+Jesteś redaktorem Master PRO. Tworzysz NEWS / REPORTAŻ.
+ZASADY (Baza + Twoje Manifesty):
+- Cel: ok. {target_chars} znaków netto.
+- STRUKTURA: Nadtytuł, Tytuł, Lid.
+- BONUS: Dodaj 5 propozycji tytułów i 3 propozycji lidów.
+- ZAKAZ: Powtórzeń słów w nagłówkach. Lid i 1. akapit nie od daty.
 - STYL: Reporterski, precyzyjny. Bez "te słowa pokazują".
-- CYTATY: Bez cudzysłowów, format pauzowy (– ... –). Min. 4 zdania w cytacie.
+- CYTATY: Bez cudzysłowów, w ramce pauzowej (– ... –). Min. 4 zdania w cytacie.
+- KONTEKST: Min. 3 zdania przed i po cytacie.
 - ZAKAZ słowa "kapłan".
 """
 
@@ -170,7 +195,7 @@ if st.button("🚀 Generuj Materiał"):
             response = model.generate_content(content)
             new_text = response.text
             st.session_state.artykul = new_text
-            # ZAPIS DO HISTORII
+            # ZAPIS TRWAŁY
             add_to_history(new_text, typ_tekstu)
         except Exception as e: st.error(f"Błąd: {e}")
 
@@ -180,14 +205,13 @@ if "artykul" in st.session_state:
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # 1. Narzędzia edycji
+    # 1. Narzędzia
     c1, c2, c3 = st.columns([1, 1, 2])
     
     if c1.button("✂️ Skróć 20%"):
         with st.spinner("Skracam..."):
             res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
             st.session_state.artykul = res.text
-            # ZAPIS DO HISTORII WERSJI SKRÓCONEJ
             add_to_history(res.text, f"{typ_tekstu} (Skrót)")
             st.rerun()
             
@@ -195,14 +219,13 @@ if "artykul" in st.session_state:
         with st.spinner("Wydłużam..."):
             res = model.generate_content(f"Wydłuż o 20%:\n\n{tekst}")
             st.session_state.artykul = res.text
-            # ZAPIS DO HISTORII WERSJI WYDŁUŻONEJ
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
             st.rerun()
             
     with c3:
          st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
 
-    # 2. GŁÓWNE OKNO (Sticky Copy)
+    # 2. OKNO WYNIKU
     st.subheader("Gotowy Artykuł:")
     st.code(tekst, language="markdown", wrap_lines=True)
     
