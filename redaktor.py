@@ -41,7 +41,7 @@ def save_history_to_disk(history_list):
 if "history" not in st.session_state:
     st.session_state.history = load_history_from_disk()
 
-# --- CSS: FIXED SCROLL ---
+# --- CSS: FIXED SCROLL & STICKY HEADER ---
 st.markdown("""
 <style>
     div[data-testid="stCodeBlock"] {
@@ -133,12 +133,16 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- PEŁNE MANIFESTY (WKLEJONE W CAŁOŚCI Z TWOICH PLIKÓW) ---
+# --- PEŁNE MANIFESTY (WKLEJONE 1:1) ---
 
-manifest_wywiad = f"""
-TRYB: WYWIAD
-CEL DŁUGOŚCI: ok. {target_chars} znaków netto (bez enterów).
+# PEŁNY TEKST Z PLIKU Wywiad_manifest.txt
+manifest_wywiad_full = f"""
+JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE WYWIADU.
+DOCELOWA DŁUGOŚĆ TEKSTU: ok. {target_chars} znaków netto (bez spacji/enterów).
 
+PEŁNE WYTYCZNE REDAKCYJNE:
+
+Wywiad
 1) Tryb i cel
 Redaguję materiał do formy Q/A.
 Robię porządną redakcję językową wypowiedzi rozmówcy.
@@ -149,8 +153,7 @@ Pracuję wyłącznie na materiale źródłowym podanym przez Ciebie.
 Nie dopisuję faktów, nazwisk, liczb ani kontekstów spoza transkrypcji.
 
 3) Zakazy stylu w pytaniach i przejściach
-Zakaz metajęzyka i „głosu narratora”. Nie używam sformułowań typu:
-„w rozmowie”, „w tej rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”, „wróćmy do”, „mówiłaś o…”, jeśli wątek nie padł przed chwilą.
+Zakaz metajęzyka i „głosu narratora”. Nie używam sformułowań typu: „w rozmowie”, „w tej rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”, „wróćmy do”, „mówiłaś o…”, jeśli wątek nie padł przed chwilą.
 Pytania mają brzmieć jak bezpośredni zwrot prowadzącego do rozmówcy (2. osoba).
 
 4) Anty-kompresja
@@ -163,82 +166,106 @@ Skracam najpierw: oczywiste powtórzenia, „yyy/eee”, dygresje techniczne.
 Nie tnę odpowiedzi tylko po to, by było krócej.
 
 6) Spójność pytań
-Nie używam odwołań typu „wspominałeś wcześniej”, jeśli temat nie padł w poprzednim pytaniu.
-Jeśli temat pochodzi z odległej części transkrypcji, wprowadzam go w pytaniu tak, jakby był nowy.
+Nie używam odwołań typu „wspominałaś wcześniej”, jeśli dany wątek nie padł w pytaniu bezpośrednio poprzedzającym.
+Każde pytanie ma być zrozumiałe „tu i teraz”.
+Jeśli przenoszę wątek z innej części rozmowy, formułuję pytanie tak, jakby temat pojawiał się po raz pierwszy.
 
-7) Redakcja wypowiedzi
-Zachowuję styl rozmówcy, ale w wersji „do druku”.
-Usuwam: „no”, „jakby”, „w sumie”, „nie?”.
-Poprawiam składnię, interpunkcję, dzielę tasiemcowe zdania.
-Usuwam nadmiarowe „ja” (np. „ja myślę” -> „myślę”), chyba że służy kontrastowi.
+7) Język rozmówcy w Q/A
+Wygładzam język mówiony na pisany, zachowując sens i styl mówiącego.
+Usuwam wypełniacze (np. „no”, „jakby”, „w sumie”, „nie?”).
+Usuwam oczywiste powtórzenia i dygresje techniczne.
+Poprawiam składnię, interpunkcję, dzielę na zdania.
+Redukuję nadmiarowe „ja” wszędzie tam, gdzie wystarczy czasownik.
+Nie dopisuję nowych treści i nie zmieniam znaczenia.
 
-8) Stała preferencja językowa
-Nie używam słowa „kapłan” i jego odmian.
+8) Dodatkowa stała preferencja językowa
+Nie używam słowa „kapłan” i jego odmian (używam: ksiądz, duchowny, duszpasterz, proboszcz, wikary).
 
-9) Struktura nagłówków
-Zawsze daję zestaw:
-- Nadtytuł
-- Tytuł (max 3 słowa)
-- Lid (1-2 zdania).
-LID W WYWIADZIE: Każdy musi zaczynać się od słowa „O”. Forma: O [czymś], o [czymś] mówi [kto].
-
-10) Checklista końcowa
-- Czy jest forma Q/A (P: / O:)?
-- Czy usunięto metajęzyk?
-- Czy neologizmy są poprawione?
-- Czy jest sekcja ZAMIANY na końcu (jeśli były neologizmy)?
+Checklista przed wysyłką wywiadu:
+[ ] Pracuję wyłącznie na materiale źródłowym, bez dopisywania faktów, nazwisk i kontekstów spoza transkrypcji
+[ ] Forma jest Q/A, bez dodatkowego „głosu narratora” między pytaniami i odpowiedziami
+[ ] W pytaniach nie ma metajęzyka typu „w rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”
+[ ] Pytania są w 2. osobie i brzmią jak bezpośredni zwrot prowadzącego do rozmówcy
+[ ] Nie ma odwołań „mówiłaś/wspominałaś/wróćmy do”, jeśli temat nie padł w maksymalnie 1 Q/A wstecz
+[ ] Jeśli temat pochodzi z dalszej części transkrypcji, pytanie wprowadza go od zera, bez presupozycji
+[ ] Anty-kompresja: zachowane są sceny, przykłady, dopowiedzenia i mikrokontrpytania, bez spłaszczania do streszczeń
+[ ] Skróty dotyczą najpierw oczywistych powtórzeń, dygresji technicznych i „yyy/eee”, a nie treści merytorycznej
+[ ] „Mniej pytań” oznacza większe pytania i ewentualnie krótkie mikrokontrpytania, a nie skracanie odpowiedzi
+[ ] Redakcja wypowiedzi rozmówcy jest do wersji „do druku” bez zmiany sensu, z poprawą składni i interpunkcji
+[ ] Usunięte są wypełniacze i nadmiarowe „ja” wszędzie tam, gdzie wystarcza czasownik
+[ ] Zwracam jedną spójną wersję ciągłą.
+[ ] Po tekście głównym dodaję sekcję „KOTWICE I PEREŁKI” – listę 3-5 najmocniejszych cytatów z rozmowy.
 """
 
-manifest_news = f"""
-TRYB: ARTYKUŁ / NEWS / REPORTAŻ
-CEL DŁUGOŚCI: ok. {target_chars} znaków netto (bez enterów).
+# PEŁNY TEKST Z PLIKU News_manifest.txt
+manifest_news_full = f"""
+JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE ARTYKUŁU / RELACJI.
+DOCELOWA DŁUGOŚĆ TEKSTU: ok. {target_chars} znaków netto (bez spacji/enterów).
 
+PEŁNE WYTYCZNE REDAKCYJNE:
+
+Artykuł / News
 1) Materiał i fakty
-Pracuję wyłącznie na materiale źródłowym.
-Nie dopisuję faktów, nazwisk, liczb ani kontekstów spoza materiału.
+Pracuję wyłącznie na materiale źródłowym dostarczonym przez Ciebie.
+Jeśli jest załącznik, wszystkie cytaty i fakty biorę tylko z pliku.
+Nie dopisuję faktów, nazwisk, liczb ani kontekstów, których nie ma w materiale.
 
 2) Zestaw nagłówków na start
-Zawsze: Nadtytuł, Tytuł, Lid.
+Na początku zawsze daję: nadtytuł, tytuł, lid.
 Automatycznie dodaję też:
-- 5 propozycji tytułów (max 3 słowa).
+- 5 propozycji tytułów (maks. 3 słowa),
 - 3 propozycje lidów.
-ZAKAZ powtórzeń słów między nadtytułem, tytułem i lidem.
-Lid i pierwszy akapit NIE mogą zaczynać się od daty.
+Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).
+Lid i pierwszy akapit nie mogą zaczynać się od daty.
 
 3) Struktura tekstu głównego
 Tekst ma brzmieć jak relacja prasowa, nie streszczenie.
-Zwykle 6–10 akapitów.
-Śródtytuły (opcjonalnie) – metaforyczne, nie na samym początku.
+Zwykle cel: 6–10 akapitów.
+Jeśli pojawiają się śródtytuły: nie mogą być na początku (najpierw akapit wejściowy), mają mieć raczej metaforyczny charakter.
 
 4) Styl i zakazy językowe
-Styl reporterski, precyzyjny. Bez klisz.
-Unikam zdań: „te słowa pokazują…”, „w tych zdaniach streszcza się…”.
-ZAKAZ: Średników (;) i dwukropków (:).
-ZAKAZ: Myślników w tekście własnym (wyjątek: cytaty).
-ZAKAZ słowa „kapłan”.
+Styl reporterski, precyzyjny, bez klisz i „gotowych fraz”.
+Unikam emfazy i zdań pustych treściowo.
+Unikam zdań komentujących cytaty w stylu „te słowa pokazują…”, „w tych zdaniach streszcza się…”.
+Nie używam średników (;).
+Nie używam dwukropków (:).
+W tekście autorskim nie używam myślników (chyba że jako wtrącenie w cytacie).
 
-5) Zasady cytowania (BARDZO WAŻNE)
-- Cytaty BEZ CUDZYSŁOWÓW.
-- Format: – Treść cytatu. Treść cytatu. – atrybucja.
-- Długość: Minimum 4 zdania w cytacie.
-- Kontekst: Minimum 3 zdania własne przed cytatem i 3 po cytacie.
-- Interpunkcja: Kropka na końcu cytatu wewnątrz pauz jest błędem, jeśli następuje atrybucja.
-- Przykład poprawny: – To jest zdanie. To drugie zdanie. – mówi rozmówca.
+5) Cytaty – reguły żelazne
+Cytaty zapisuję bez cudzysłowów.
+Stosuję wyłącznie format z myślnikami/pauzami, np.:
+– To jest treść cytatu. To jest dalsza część. – mówi Jan Kowalski.
+– To jest kolejny cytat. – dodaje.
 
-6) Zakończenie
-Domknij konkretem, informacją organizacyjną lub cytatem-puentą.
-Nie kończ ogólną refleksją, podsumowaniem „znaczenia wydarzenia”.
+6) Redakcja cytatów
+Zasada 4 zdań: Każdy cytat ma mieć minimum cztery zdania, żeby w pełni oddać myśl.
+Zasada kontekstu: Przed każdym cytatem muszą być min. 3 zdania wprowadzające, a po każdym cytacie min. 3 zdania rozwinięcia/komentarza (nie streszczenia!).
+Gęstość: Celuję w jeden solidny blok cytatu na jeden akapit tekstu.
 
-7) Checklista
-- Czy usunięto słowo „kapłan”?
-- Czy cytaty są bez cudzysłowów?
-- Czy zachowano proporcje cytatów (min. 4 zdania)?
+7) Zakazy językowe cd.
+Nie używam słowa „kapłan” i jego odmian (zastąp: duchowny, ksiądz, duszpasterz).
+
+Checklista przed wysyłką artykułu:
+[ ] Pracuję tylko na materiale źródłowym, bez dopisywania faktów spoza pliku
+[ ] Na początku są nadtytuł, tytuł, lid oraz 5 propozycji tytułów i 3 propozycje lidów
+[ ] Nadtytuł, tytuł i lid nie powtarzają żadnych słów między sobą
+[ ] Lid i pierwszy akapit nie zaczynają się od daty
+[ ] Tekst ma formę relacji prasowej i trzyma ustaloną strukturę akapitów
+[ ] W tekście nie ma średników ani dwukropków
+[ ] W tekście własnym nie ma zdań z myślnikami, wyjątek dotyczy wyłącznie formatu cytowania
+[ ] Cytaty są bez cudzysłowów i są redagowane do języka pisanego
+[ ] Każdy cytat ma minimum cztery zdania
+[ ] Przed każdym cytatem są minimum trzy zdania kontekstu
+[ ] Po każdym cytacie są minimum trzy zdania rozwinięcia
+[ ] Nie ma słowa „kapłan”
 """
 
+# Wybór manifestu
 if typ_tekstu == "Wywiad":
-    manifest = manifest_wywiad
+    manifest = manifest_wywiad_full
 else:
-    manifest = manifest_news
+    # Dla News i Reportażu używamy manifestu newsowego
+    manifest = manifest_news_full
 
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
@@ -268,17 +295,22 @@ if "artykul" in st.session_state:
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
+    # 1. Narzędzia
     c1, c2, c3 = st.columns([1, 1, 2])
+    
     if c1.button("✂️ Skróć 20%"):
         with st.spinner("Skracam..."):
-            res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
+            # Przy skracaniu też przypominamy kluczowe zasady
+            prompt_short = f"Skróć ten tekst o 20% (cel: {int(netto*0.8)} znaków), ale zachowaj strukturę i ZAKAZ słowa 'kapłan':\n\n{tekst}"
+            res = model.generate_content(prompt_short)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Skrót)")
             st.rerun()
             
     if c2.button("➕ Wydłuż 20%"):
         with st.spinner("Wydłużam..."):
-            res = model.generate_content(f"Wydłuż o 20%:\n\n{tekst}")
+            prompt_long = f"Wydłuż ten tekst o 20% (cel: {int(netto*1.2)} znaków), dodając detale z kontekstu, ale trzymaj się ZAKAZÓW (brak cudzysłowów w cytatach):\n\n{tekst}"
+            res = model.generate_content(prompt_long)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
             st.rerun()
@@ -286,6 +318,9 @@ if "artykul" in st.session_state:
     with c3:
          st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
 
+    # 2. OKNO WYNIKU
     st.subheader("Gotowy Artykuł:")
     st.code(tekst, language="markdown", wrap_lines=True)
+    
+    # 3. Pobieranie
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
