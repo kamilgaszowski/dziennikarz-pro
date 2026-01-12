@@ -10,7 +10,7 @@ except ImportError:
     HAS_LIBS = False
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
-st.title("🖋️ Dziennikarz Master PRO v10.8")
+st.title("🖋️ Dziennikarz Master PRO v10.9")
 
 if not HAS_LIBS:
     st.warning("⚠️ Brak bibliotek do czytania DOCX/PDF. Zainstaluj python-docx i pypdf2.")
