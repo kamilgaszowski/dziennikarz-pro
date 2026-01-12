@@ -141,4 +141,7 @@ if "artykul" in st.session_state:
     # Używamy natywnego st.code, bo jego przycisk kopiowania jest niezawodny.
     # CSS powyżej wymusza na nim zachowanie "okna z przewijaniem".
     st.subheader("Gotowy Artykuł:")
-    st.code(tek
+    st.code(tekst, language="markdown", wrap_lines=True)
+    
+    # 3. Pobieranie
+    st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
