@@ -28,16 +28,12 @@ st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", lay
 HISTORY_FILE = "historia_redaktora.json"
 
 def extract_title_from_text(text):
-    """Próbuje wyciągnąć tytuł z tekstu do wyświetlania w historii."""
     lines = [line.strip() for line in text.split('\n') if line.strip()]
-    # 1. Szukamy linii zaczynającej się wprost od "Tytuł:"
     for line in lines[:10]:
         if line.lower().startswith("tytuł:") or line.lower().startswith("tytuł"):
             return line.split(":", 1)[-1].strip().replace("*", "")
-    # 2. Jeśli nie ma etykiety, zakładamy, że 2. linia to tytuł (bo 1. to nadtytuł)
     if len(lines) >= 2:
         return lines[1].replace("#", "").replace("*", "").strip()
-    # 3. Fallback
     if lines:
         return lines[0].replace("#", "").replace("*", "").strip()[:50] + "..."
     return "Bez tytułu"
@@ -100,7 +96,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v13.9")
+st.title("🖋️ Dziennikarz Master PRO v14.0")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -298,11 +294,14 @@ if typ_tekstu == "Wywiad":
 else:
     manifest = manifest_news_full
 
-# --- GENEROWANIE ---
+# --- GENEROWANIE Z WYMUSZANIEM DŁUGOŚCI ---
 if st.button("🚀 Generuj Materiał"):
-    content = [manifest]
-    if all_source: content.append(f"TEKST:\n{all_source}")
     
+    # 1. Budowa promptu bazowego
+    content_payload = [manifest]
+    if all_source: content_payload.append(f"TEKST ŹRÓDŁOWY:\n{all_source}")
+    
+    # 2. Obsługa Audio
     if uploaded_audio:
         with st.spinner("Przesyłam audio do Gemini 3..."):
             with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
@@ -310,11 +309,28 @@ if st.button("🚀 Generuj Materiał"):
             while audio_file.state.name == "PROCESSING": 
                 time.sleep(2)
                 audio_file = genai.get_file(audio_file.name)
-            content.append(audio_file)
+            content_payload.append(audio_file)
+
+    # 3. DODANIE "STRAŻNIKA DŁUGOŚCI" NA KOŃCU PROMPTU
+    # To jest kluczowe dla v14.0 - instrukcja na końcu, która ma priorytet
+    length_enforcer = f"""
+    
+    *** INSTRUKCJA PRIORYTETOWA (DŁUGOŚĆ) ***
+    Użytkownik ustawił limit: {target_chars} znaków.
+    
+    TWOJE ZADANIE DOTYCZĄCE OBJĘTOŚCI:
+    1. Musisz celować w przedział {int(target_chars * 0.9)} - {int(target_chars * 1.1)} znaków netto.
+    2. JEŚLI MATERIAŁU JEST ZA DUŻO: Dokonaj selekcji wątków. Odrzuć mniej istotne, ale te, które zostawisz - opisz SZEROKO (zgodnie z zasadą anty-kompresji). Lepiej opisać 3 wątki głęboko niż 10 po łebkach.
+    3. JEŚLI MATERIAŁU JEST ZA MAŁO: Wykorzystaj 100% materiału i zadbaj o bogaty styl.
+    
+    Nie pisz elaboratów na 20 tys. znaków, jeśli limit to {target_chars}. Bądź precyzyjny.
+    """
+    
+    content_payload.append(length_enforcer)
 
     with st.spinner("Generowanie tekstu..."):
         try:
-            response = model.generate_content(content)
+            response = model.generate_content(content_payload)
             new_text = response.text
             st.session_state.artykul = new_text
             add_to_history(new_text, typ_tekstu)
@@ -331,7 +347,7 @@ if "artykul" in st.session_state:
     
     if c1.button("✂️ Skróć 20%"):
         with st.spinner("Skracam..."):
-            prompt_short = f"Skróć o 20% (cel: {int(netto*0.8)}), ale zachowaj checklistę:\n\n{tekst}"
+            prompt_short = f"Skróć o 20% (cel: {int(netto*0.8)}), ZAKAZ słowa 'kapłan':\n\n{tekst}"
             res = model.generate_content(prompt_short)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Skrót)")
@@ -339,7 +355,7 @@ if "artykul" in st.session_state:
             
     if c2.button("➕ Wydłuż 20%"):
         with st.spinner("Wydłużam..."):
-            prompt_long = f"Wydłuż o 20% (cel: {int(netto*1.2)}), ale zachowaj checklistę:\n\n{tekst}"
+            prompt_long = f"Wydłuż o 20% (cel: {int(netto*1.2)}), ZAKAZ cudzysłowów:\n\n{tekst}"
             res = model.generate_content(prompt_long)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
