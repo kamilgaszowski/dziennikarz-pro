@@ -1,17 +1,3 @@
-Rozumiem. Wprowadzamy zmiany UX (User Experience) oraz logikę liczenia znaków "netto" (bez nagłówków).
-
-Oto wersja **v14.4**.
-
-### Co zmieniono?
-
-1. **Stały Panel Boczny:** Sekcja "Status i Korekta" jest teraz widoczna **zawsze**. Jeśli nie ma jeszcze artykułu, licznik pokazuje "0", a przyciski są **nieaktywne (szare)**.
-2. **Czyste Przyciski:** Usunąłem ikony (nożyczki, plusy). Są teraz proste: "Skróć" i "Wydłuż".
-3. **Inteligentne Liczenie (Body Only):** Dodałem funkcję, która analizuje tekst. Zakładamy, że zgodnie z Twoim manifestem pierwsze 3 bloki tekstu to *Nadtytuł*, *Tytuł* i *Lid*. Funkcja pomija je i liczy znaki dopiero od 4. bloku (właściwej treści).
-4. **Kontekst:** Pasek boczny reaguje dynamicznie na to, co dzieje się w aplikacji.
-
-Oto kompletny kod:
-
-```python
 import streamlit as st
 import google.generativeai as genai
 import time
@@ -409,5 +395,3 @@ if "artykul" in st.session_state:
     st.subheader("Gotowy Artykuł:")
     st.code(tekst, language="markdown", wrap_lines=True)
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
-
-```
