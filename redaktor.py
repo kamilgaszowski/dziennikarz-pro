@@ -21,75 +21,86 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- CSS: KONTENER "CHAT-LIKE" ---
-# Stylizacja ramki z przyklejonym nagłówkiem
+# --- CSS: WYGLĄD IDEALNIE JAK W STREAMLIT ---
 st.markdown("""
 <style>
-    .editor-container {
-        background-color: #0e1117;
+    /* Kontener główny - ramka */
+    .st-code-container {
         border: 1px solid #31333f;
         border-radius: 8px;
+        background-color: #0e1117;
         margin-top: 10px;
         overflow: hidden;
+        position: relative;
         display: flex;
         flex-direction: column;
-        position: relative;
+        max-height: 75vh; /* Maksymalna wysokość okna */
     }
-    
-    .editor-header {
+
+    /* Nagłówek przyklejony (Sticky) */
+    .st-code-header {
         background-color: #262730;
-        padding: 10px 15px;
-        border-bottom: 1px solid #31333f;
+        padding: 8px 12px;
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-end; /* Ikona po prawej */
         align-items: center;
-        position: sticky; /* PRZYKLEJENIE DO GÓRY */
+        border-bottom: 1px solid #31333f;
+        position: sticky;
         top: 0;
         z-index: 10;
+        height: 40px;
     }
 
-    .editor-title {
-        color: #bdc6d5;
-        font-family: sans-serif;
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .copy-btn-integrated {
-        background-color: transparent;
-        color: #fafafa;
-        border: 1px solid #41444e;
-        border-radius: 4px;
-        padding: 5px 12px;
-        font-size: 0.8rem;
+    /* Przycisk z ikoną */
+    .copy-button-icon {
+        background: transparent;
+        border: none;
         cursor: pointer;
-        transition: all 0.2s;
+        color: #fafafa;
+        opacity: 0.7;
+        padding: 4px;
+        border-radius: 4px;
         display: flex;
         align-items: center;
-        gap: 6px;
+        transition: opacity 0.2s, background-color 0.2s;
     }
 
-    .copy-btn-integrated:hover {
+    .copy-button-icon:hover {
+        opacity: 1;
         background-color: #31333f;
-        border-color: #fafafa;
     }
 
-    .editor-content {
-        padding: 20px;
+    /* Pole tekstowe udające zwykły tekst */
+    .st-code-content {
+        background-color: #0e1117;
         color: #fafafa;
+        border: none;
+        width: 100%;
+        padding: 15px;
         font-family: 'Source Code Pro', monospace;
-        font-size: 0.95rem;
-        line-height: 1.6;
-        white-space: pre-wrap; /* Zawijanie wierszy */
-        max-height: 75vh; /* Ramka ma max 75% wysokości ekranu */
-        overflow-y: auto; /* Własny scroll wewnątrz ramki */
+        font-size: 14px;
+        line-height: 1.5;
+        resize: none; /* Blokada zmiany rozmiaru myszką */
+        outline: none;
+        overflow-y: auto; /* Scroll wewnątrz */
+        min-height: 400px;
+        height: 100%;
+        white-space: pre-wrap;
+    }
+    
+    /* Ukrycie scrollbara dla estetyki (opcjonalne) */
+    .st-code-content::-webkit-scrollbar {
+        width: 8px;
+        background: #0e1117;
+    }
+    .st-code-content::-webkit-scrollbar-thumb {
+        background: #31333f;
+        border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v12.4")
+st.title("🖋️ Dziennikarz Master PRO v12.5")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -114,7 +125,7 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     st.divider()
-    st.caption("v12.4 | Gemini 3 Pro")
+    st.caption("v12.5 | Native Look & Fix")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -130,7 +141,7 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY (PROMPTY) ---
+# --- MANIFESTY ---
 strict_length = f"CEL: {target_chars} znaków netto (bez enterów)."
 if typ_tekstu == "Wywiad":
     manifest = f"TRYB wywiad. {strict_length} Redaguj Q/A. Zakaz metajęzyka i słowa 'kapłan'. Nagłówki: 5 zestawów (nadtytuł, tytuł, lid na 'O')."
@@ -154,13 +165,13 @@ if st.button("🚀 Generuj Materiał"):
             st.session_state.artykul = response.text
         except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI: TYLKO JEDEN WIDOK ---
+# --- WYNIKI: JEDNO OKNO Z DZIAŁAJĄCYM KOPIOWANIEM ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # 1. Przyciski korekty i licznik
+    # 1. Przyciski korekty i licznik (poza ramką)
     c1, c2, c3 = st.columns([1, 1, 2])
     if c1.button("✂️ Skróć 20%"):
         res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
@@ -173,36 +184,49 @@ if "artykul" in st.session_state:
     with c3:
          st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
 
-    # 2. KONTENER HTML (To jest ten właściwy element)
+    # 2. KOMPONENT ARTYKUŁU (HTML + JS + SVG)
+    # SVG ikonki kopiowania (dwie karteczki)
+    copy_icon_svg = """
+    <svg viewBox="0 0 24 24" aria-hidden="true" height="16" width="16" fill="currentColor">
+        <path d="M7 6V3a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v7a1 1 0 0 1-1 1h-2v3a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3zM9 2a1 1 0 0 0-1 1v3h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H10zM6 8v9a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V8H8a1 1 0 0 0-1 1zm9-5h2a1 1 0 0 1 1 1v7h-2V3z"></path>
+    </svg>
+    """
+    
+    # Bezpieczne kodowanie tekstu
     safe_text = json.dumps(tekst) 
     
+    # Renderowanie HTML
     st.markdown(f"""
-        <div class="editor-container">
-            <div class="editor-header">
-                <div class="editor-title">
-                    Gotowy Artykuł
-                </div>
-                <button class="copy-btn-integrated" onclick="copyToClipboard()">
-                    📋 Kopiuj
+        <div class="st-code-container">
+            <div class="st-code-header">
+                <button class="copy-button-icon" onclick="copyNative()" title="Kopiuj do schowka">
+                    {copy_icon_svg}
                 </button>
             </div>
-            <div class="editor-content">{tekst}</div>
+            <textarea id="article-content" class="st-code-content" readonly>{tekst}</textarea>
         </div>
 
         <script>
-        function copyToClipboard() {{
-            const text = {safe_text};
-            navigator.clipboard.writeText(text).then(() => {{
-                const btn = document.querySelector('.copy-btn-integrated');
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '✅ Skopiowano!';
-                setTimeout(() => {{
-                    btn.innerHTML = originalText;
-                }}, 2000);
-            }});
+        function copyNative() {{
+            const textArea = document.getElementById('article-content');
+            textArea.select();
+            textArea.setSelectionRange(0, 99999); /* Dla urządzeń mobilnych */
+            
+            try {{
+                document.execCommand('copy');
+                const btn = document.querySelector('.copy-button-icon');
+                const originalColor = btn.style.color;
+                btn.style.color = '#4caf50'; // Zielony kolor sukcesu
+                setTimeout(() => {{ btn.style.color = ''; }}, 1000);
+            }} catch (err) {{
+                console.error('Błąd kopiowania', err);
+            }}
+            
+            // Odznacz tekst po skopiowaniu
+            window.getSelection().removeAllRanges();
         }}
         </script>
     """, unsafe_allow_html=True)
     
-    # 3. Pobieranie pliku (bez wyświetlania tekstu ponownie!)
+    # Przycisk pobierania na samym dole
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
