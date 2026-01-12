@@ -4,7 +4,6 @@ import time
 import io
 import json
 import os
-import re
 from datetime import datetime
 
 # 1. KONFIGURACJA API
@@ -27,39 +26,11 @@ st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", lay
 # --- TRWAŁA HISTORIA ---
 HISTORY_FILE = "historia_redaktora.json"
 
-def extract_title_from_text(text):
-    """
-    Próbuje inteligentnie wyciągnąć tytuł z tekstu.
-    Zakładamy strukturę: Nadtytuł -> Tytuł -> Lid.
-    """
-    lines = [line.strip() for line in text.split('\n') if line.strip()]
-    
-    # 1. Szukamy linii zaczynającej się wprost od "Tytuł:"
-    for line in lines[:10]:
-        if line.lower().startswith("tytuł:") or line.lower().startswith("tytuł"):
-            return line.split(":", 1)[-1].strip().replace("*", "")
-            
-    # 2. Jeśli nie ma etykiety, zakładamy, że 2. linia to tytuł (bo 1. to nadtytuł)
-    if len(lines) >= 2:
-        clean_title = lines[1].replace("#", "").replace("*", "").strip()
-        return clean_title
-    
-    # 3. Fallback - pierwsza linia
-    if lines:
-        return lines[0].replace("#", "").replace("*", "").strip()[:50] + "..."
-        
-    return "Bez tytułu"
-
 def load_history_from_disk():
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                # Migracja dla starych wpisów bez tytułu
-                for item in data:
-                    if "title" not in item:
-                        item["title"] = extract_title_from_text(item["content"])
-                return data
+                return json.load(f)
         except: return []
     return []
 
@@ -69,21 +40,6 @@ def save_history_to_disk(history_list):
 
 if "history" not in st.session_state:
     st.session_state.history = load_history_from_disk()
-
-def add_to_history(text, type_label):
-    timestamp = datetime.now().strftime("%d-%m %H:%M")
-    # Automatyczne wyciąganie tytułu
-    extracted_title = extract_title_from_text(text)
-    
-    entry = {
-        "time": timestamp,
-        "type": type_label,
-        "content": text,
-        "chars": len(text.replace("\n", "").replace("\r", "")),
-        "title": extracted_title
-    }
-    st.session_state.history.insert(0, entry)
-    save_history_to_disk(st.session_state.history)
 
 # --- CSS: FIXED SCROLL & STICKY HEADER ---
 st.markdown("""
@@ -107,16 +63,10 @@ st.markdown("""
         border: 2px solid #0e1117;
     }
     .stDeployButton {display:none;}
-    
-    /* Stylizacja listy historii */
-    .history-item {
-        padding: 10px 0;
-        border-bottom: 1px solid #31333f;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v13.8")
+st.title("🖋️ Dziennikarz Master PRO v13.7")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -135,6 +85,17 @@ def read_text_file(uploaded_file):
     except: return ""
     return ""
 
+def add_to_history(text, type_label):
+    timestamp = datetime.now().strftime("%d-%m %H:%M")
+    entry = {
+        "time": timestamp,
+        "type": type_label,
+        "content": text,
+        "chars": count_net_chars(text)
+    }
+    st.session_state.history.insert(0, entry)
+    save_history_to_disk(st.session_state.history)
+
 # --- PANEL BOCZNY ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
@@ -143,31 +104,20 @@ with st.sidebar:
     
     st.divider()
     st.subheader("🗄️ Historia (Trwała)")
-    
     if len(st.session_state.history) > 0:
         for i, item in enumerate(st.session_state.history):
-            # Kontener dla jednego wpisu
-            with st.container():
-                # Tytuł (Pogrubiony)
-                st.markdown(f"**{item.get('title', 'Bez tytułu')}**")
-                
-                # Meta dane w jednej linii (Typ | Data) - mała czcionka
-                st.caption(f"{item['type']} | {item['time']} | {item['chars']} zn.")
-                
-                # Przycisk wczytania
-                btn_key = f"rest_{i}_{item['time']}"
-                if st.button("📂 Wczytaj", key=btn_key):
-                    st.session_state.artykul = item['content']
-                    st.rerun()
-                
-                st.markdown("---") # Separator
-        
+            btn_key = f"hist_{i}_{item['time']}"
+            label = f"{item['time']} | {item['type']} ({item['chars']})"
+            if st.button(label, key=btn_key):
+                st.session_state.artykul = item['content']
+                st.rerun()
+        st.markdown("---")
         if st.button("🗑️ Usuń wszystko"):
             st.session_state.history = []
             save_history_to_disk([])
             st.rerun()
     else:
-        st.caption("Historia jest pusta.")
+        st.caption("Pusto.")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -183,43 +133,147 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- PEŁNE MANIFESTY (v13.7 Base) ---
+# --- PEŁNE MANIFESTY (WKLEJONE 1:1) ---
 
-# WYWIAD
+# PEŁNY TEKST Z PLIKU Wywiad_manifest.txt
 manifest_wywiad_full = f"""
 JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE WYWIADU.
-DOCELOWA DŁUGOŚĆ: ok. {target_chars} znaków netto.
+DOCELOWA DŁUGOŚĆ TEKSTU: ok. {target_chars} znaków netto (bez spacji/enterów).
 
-WYTYCZNE:
-1. Forma Q/A. Porządna redakcja językowa wypowiedzi.
-2. Pracuj TYLKO na materiale źródłowym.
-3. ZAKAZ METAJĘZYKA (np. "w tej rozmowie"). Pytania w 2. osobie.
-4. ANTY-KOMPRESJA: Zachowuj sceny, przykłady. Nie streszczaj.
-5. ZAKAZ: "mówiłaś wcześniej" (chyba że w pytaniu obok).
-6. Redakcja: Język mówiony -> pisany. Usuń "yyy", powtórzenia.
-7. ZAKAZ słowa "kapłan".
-8. NAGŁÓWKI: Nadtytuł -> Tytuł -> Lid.
+PEŁNE WYTYCZNE REDAKCYJNE:
+
+Wywiad
+1) Tryb i cel
+Redaguję materiał do formy Q/A.
+Robię porządną redakcję językową wypowiedzi rozmówcy.
+Nie dodaję treści. Porządkuję, wygładzam, układam.
+
+2) Zasada nadrzędna pracy na źródle
+Pracuję wyłącznie na materiale źródłowym podanym przez Ciebie.
+Nie dopisuję faktów, nazwisk, liczb ani kontekstów spoza transkrypcji.
+
+3) Zakazy stylu w pytaniach i przejściach
+Zakaz metajęzyka i „głosu narratora”. Nie używam sformułowań typu: „w rozmowie”, „w tej rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”, „wróćmy do”, „mówiłaś o…”, jeśli wątek nie padł przed chwilą.
+Pytania mają brzmieć jak bezpośredni zwrot prowadzącego do rozmówcy (2. osoba).
+
+4) Anty-kompresja
+Nie spłaszczam wypowiedzi do streszczeń.
+Zachowuję sceny, przykłady, dopowiedzenia, mikrokontrpytania.
+Skracam najpierw: oczywiste powtórzenia, „yyy/eee”, dygresje techniczne.
+
+5) Mniej pytań, większa głębia
+„Mniej pytań” oznacza większe pytania + ewentualnie krótkie mikrokontrpytania.
+Nie tnę odpowiedzi tylko po to, by było krócej.
+
+6) Spójność pytań
+Nie używam odwołań typu „wspominałaś wcześniej”, jeśli dany wątek nie padł w pytaniu bezpośrednio poprzedzającym.
+Każde pytanie ma być zrozumiałe „tu i teraz”.
+Jeśli przenoszę wątek z innej części rozmowy, formułuję pytanie tak, jakby temat pojawiał się po raz pierwszy.
+
+7) Język rozmówcy w Q/A
+Wygładzam język mówiony na pisany, zachowując sens i styl mówiącego.
+Usuwam wypełniacze (np. „no”, „jakby”, „w sumie”, „nie?”).
+Usuwam oczywiste powtórzenia i dygresje techniczne.
+Poprawiam składnię, interpunkcję, dzielę na zdania.
+Redukuję nadmiarowe „ja” wszędzie tam, gdzie wystarczy czasownik.
+Nie dopisuję nowych treści i nie zmieniam znaczenia.
+
+8) Dodatkowa stała preferencja językowa
+Nie używam słowa „kapłan” i jego odmian (używam: ksiądz, duchowny, duszpasterz, proboszcz, wikary).
+
+9) Zestaw nagłówków na start
+Na początku zawsze daję: nadtytuł, tytuł, lid.
+Automatycznie dodaję też:
+- 5 propozycji tytułów (maks. 3 słowa),
+- 3 propozycje lidów.
+Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).
+Lid i pierwszy akapit nie mogą zaczynać się od daty.
+
+
+Checklista przed wysyłką wywiadu:
+[ ] Pracuję wyłącznie na materiale źródłowym, bez dopisywania faktów, nazwisk i kontekstów spoza transkrypcji
+[ ] Forma jest Q/A, bez dodatkowego „głosu narratora” między pytaniami i odpowiedziami
+[ ] W pytaniach nie ma metajęzyka typu „w rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”
+[ ] Pytania są w 2. osobie i brzmią jak bezpośredni zwrot prowadzącego do rozmówcy
+[ ] Nie ma odwołań „mówiłaś/wspominałaś/wróćmy do”, jeśli temat nie padł w maksymalnie 1 Q/A wstecz
+[ ] Jeśli temat pochodzi z dalszej części transkrypcji, pytanie wprowadza go od zera, bez presupozycji
+[ ] Anty-kompresja: zachowane są sceny, przykłady, dopowiedzenia i mikrokontrpytania, bez spłaszczania do streszczeń
+[ ] Skróty dotyczą najpierw oczywistych powtórzeń, dygresji technicznych i „yyy/eee”, a nie treści merytorycznej
+[ ] „Mniej pytań” oznacza większe pytania i ewentualnie krótkie mikrokontrpytania, a nie skracanie odpowiedzi
+[ ] Redakcja wypowiedzi rozmówcy jest do wersji „do druku” bez zmiany sensu, z poprawą składni i interpunkcji
+[ ] Usunięte są wypełniacze i nadmiarowe „ja” wszędzie tam, gdzie wystarcza czasownik
+[ ] Zwracam jedną spójną wersję ciągłą.
+[ ] Po tekście głównym dodaję sekcję „KOTWICE I PEREŁKI” – listę 3-5 najmocniejszych cytatów z rozmowy.
 """
 
-# NEWS
+# PEŁNY TEKST Z PLIKU News_manifest.txt
 manifest_news_full = f"""
-JESTEŚ REDAKTOREM MASTER PRO. TWÓRZ NEWS / REPORTAŻ.
-DOCELOWA DŁUGOŚĆ: ok. {target_chars} znaków netto.
+JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE ARTYKUŁU / RELACJI.
+DOCELOWA DŁUGOŚĆ TEKSTU: ok. {target_chars} znaków netto (bez spacji/enterów).
 
-WYTYCZNE:
-1. Pracuj TYLKO na materiale źródłowym.
-2. NAGŁÓWKI: Nadtytuł, Tytuł, Lid + (5 tytułów i 3 lidy extra).
-   Zakaz powtórzeń słów w nagłówkach. Lid nie od daty.
-3. STYL: Reporterski, bez "te słowa pokazują".
-4. CYTATY: BEZ CUDZYSŁOWÓW. Format pauzowy (– ... –).
-   Min. 4 zdania w cytacie.
-   Min. 3 zdania kontekstu przed i po.
-5. ZAKAZ słowa "kapłan".
+PEŁNE WYTYCZNE REDAKCYJNE:
+
+Artykuł / News
+1) Materiał i fakty
+Pracuję wyłącznie na materiale źródłowym dostarczonym przez Ciebie.
+Jeśli jest załącznik, wszystkie cytaty i fakty biorę tylko z pliku.
+Nie dopisuję faktów, nazwisk, liczb ani kontekstów, których nie ma w materiale.
+
+2) Zestaw nagłówków na start
+Na początku zawsze daję: nadtytuł, tytuł, lid.
+Automatycznie dodaję też:
+- 5 propozycji tytułów (maks. 3 słowa),
+- 3 propozycje lidów.
+Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych formach (odmiana, liczba, przypadek).
+Lid i pierwszy akapit nie mogą zaczynać się od daty.
+
+3) Struktura tekstu głównego
+Tekst ma brzmieć jak relacja prasowa, nie streszczenie.
+Zwykle cel: 6–10 akapitów.
+Jeśli pojawiają się śródtytuły: nie mogą być na początku (najpierw akapit wejściowy), mają mieć raczej metaforyczny charakter.
+
+4) Styl i zakazy językowe
+Styl reporterski, precyzyjny, bez klisz i „gotowych fraz”.
+Unikam emfazy i zdań pustych treściowo.
+Unikam zdań komentujących cytaty w stylu „te słowa pokazują…”, „w tych zdaniach streszcza się…”.
+Nie używam średników (;).
+Nie używam dwukropków (:).
+W tekście autorskim nie używam myślników (chyba że jako wtrącenie w cytacie).
+
+5) Cytaty – reguły żelazne
+Cytaty zapisuję bez cudzysłowów.
+Stosuję wyłącznie format z myślnikami/pauzami, np.:
+– To jest treść cytatu. To jest dalsza część. – mówi Jan Kowalski.
+– To jest kolejny cytat. – dodaje.
+
+6) Redakcja cytatów
+Zasada 4 zdań: Każdy cytat ma mieć minimum cztery zdania, żeby w pełni oddać myśl.
+Zasada kontekstu: Przed każdym cytatem muszą być min. 3 zdania wprowadzające, a po każdym cytacie min. 3 zdania rozwinięcia/komentarza (nie streszczenia!).
+Gęstość: Celuję w jeden solidny blok cytatu na jeden akapit tekstu.
+
+7) Zakazy językowe cd.
+Nie używam słowa „kapłan” i jego odmian (zastąp: duchowny, ksiądz, duszpasterz).
+
+Checklista przed wysyłką artykułu:
+[ ] Pracuję tylko na materiale źródłowym, bez dopisywania faktów spoza pliku
+[ ] Na początku są nadtytuł, tytuł, lid oraz 5 propozycji tytułów i 3 propozycje lidów
+[ ] Nadtytuł, tytuł i lid nie powtarzają żadnych słów między sobą
+[ ] Lid i pierwszy akapit nie zaczynają się od daty
+[ ] Tekst ma formę relacji prasowej i trzyma ustaloną strukturę akapitów
+[ ] W tekście nie ma średników ani dwukropków
+[ ] W tekście własnym nie ma zdań z myślnikami, wyjątek dotyczy wyłącznie formatu cytowania
+[ ] Cytaty są bez cudzysłowów i są redagowane do języka pisanego
+[ ] Każdy cytat ma minimum cztery zdania
+[ ] Przed każdym cytatem są minimum trzy zdania kontekstu
+[ ] Po każdym cytacie są minimum trzy zdania rozwinięcia
+[ ] Nie ma słowa „kapłan”
 """
 
+# Wybór manifestu
 if typ_tekstu == "Wywiad":
     manifest = manifest_wywiad_full
 else:
+    # Dla News i Reportażu używamy manifestu newsowego
     manifest = manifest_news_full
 
 # --- GENEROWANIE ---
@@ -255,7 +309,8 @@ if "artykul" in st.session_state:
     
     if c1.button("✂️ Skróć 20%"):
         with st.spinner("Skracam..."):
-            prompt_short = f"Skróć o 20% (cel: {int(netto*0.8)}), ZAKAZ słowa 'kapłan':\n\n{tekst}"
+            # Przy skracaniu też przypominamy kluczowe zasady
+            prompt_short = f"Skróć ten tekst o 20% (cel: {int(netto*0.8)} znaków), ale zachowaj strukturę i ZAKAZ słowa 'kapłan':\n\n{tekst}"
             res = model.generate_content(prompt_short)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Skrót)")
@@ -263,7 +318,7 @@ if "artykul" in st.session_state:
             
     if c2.button("➕ Wydłuż 20%"):
         with st.spinner("Wydłużam..."):
-            prompt_long = f"Wydłuż o 20% (cel: {int(netto*1.2)}), ZAKAZ cudzysłowów:\n\n{tekst}"
+            prompt_long = f"Wydłuż ten tekst o 20% (cel: {int(netto*1.2)} znaków), dodając detale z kontekstu, ale trzymaj się ZAKAZÓW (brak cudzysłowów w cytatach):\n\n{tekst}"
             res = model.generate_content(prompt_long)
             st.session_state.artykul = res.text
             add_to_history(res.text, f"{typ_tekstu} (Długi)")
