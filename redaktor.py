@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (FINAL FIX) ---
+# --- CSS (MARGIN & HEIGHT FIX) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,36 +62,38 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER - LEWOSTRONNY I WĄSKI */
+    /* 2. UPLOADER - LEWOSTRONNY, WĄSKI I WYSOKI */
     [data-testid='stFileUploader'] {
         margin-top: 10px;
-        margin-bottom: 15px;
-        /* Ograniczenie szerokości */
+        /* SZTYWNY MARGINES DOLNY - ODZIELA OD NOTATEK */
+        margin-bottom: 40px !important; 
         max-width: 500px; 
-        /* WYRÓWNANIE KONTENERA DO LEWEJ */
         margin-left: 0px !important;
         margin-right: auto;
     }
     
     /* Stylizacja ramki */
     [data-testid='stFileUploader'] section {
-        padding: 15px !important;
+        padding: 20px !important;
+        /* DODATKOWY PADDING DOLNY, ŻEBY PRZYCISK SIĘ MIEŚCIŁ W RAMCE */
+        padding-bottom: 40px !important;
         background-color: #16181e; 
         border: 1px dashed #333; 
         border-radius: 6px;
         
-        /* WYRÓWNANIE ZAWARTOŚCI DO LEWEJ */
         text-align: left !important;
         align-items: flex-start !important;
         display: flex;
         flex-direction: column;
+        
+        /* MINIMALNA WYSOKOŚĆ DLA BEZPIECZEŃSTWA */
+        min-height: 120px !important;
     }
     
     [data-testid='stFileUploader'] section:hover {
         border-color: #666;
         background-color: #1c1f26;
     }
-    /* Opcjonalnie: ukrycie ikony chmury dla minimalizmu */
     [data-testid='stFileUploader'] svg { display: none; }
     
     .st-emotion-cache-1ae8axi { margin-bottom: 0px !important; }
@@ -228,7 +230,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.16</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.17</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -293,7 +295,7 @@ with st.sidebar:
 
 # --- GŁÓWNY INTERFEJS ---
 
-# 1. IMPORT (Left Aligned & Narrow)
+# 1. IMPORT
 uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
 
 audio_to_proc = None
@@ -306,7 +308,6 @@ if uploaded:
     if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
     if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
     if info: 
-        # Informacja o plikach - też wyrównana do lewej (z małym wcięciem)
         st.markdown(f"<div style='text-align: left; color: #888; font-size: 12px; margin-top: -10px; padding-left: 5px;'>{' • '.join(info)}</div>", unsafe_allow_html=True)
 
 # 2. NOTATKA
