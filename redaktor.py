@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (LEFT ALIGNED UPLOADER) ---
+# --- CSS (FINAL FIX) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,26 +62,27 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER - LEWOSTRONNY */
+    /* 2. UPLOADER - LEWOSTRONNY I WĄSKI */
     [data-testid='stFileUploader'] {
         margin-top: 10px;
         margin-bottom: 15px;
-        /* Pudełko wyśrodkowane, ale ograniczone szerokością */
-        max-width: 600px; 
-        margin-left: auto;
+        /* Ograniczenie szerokości */
+        max-width: 500px; 
+        /* WYRÓWNANIE KONTENERA DO LEWEJ */
+        margin-left: 0px !important;
         margin-right: auto;
     }
     
-    /* Stylizacja kontenera */
+    /* Stylizacja ramki */
     [data-testid='stFileUploader'] section {
-        padding: 20px !important;
+        padding: 15px !important;
         background-color: #16181e; 
         border: 1px dashed #333; 
         border-radius: 6px;
         
-        /* KLUCZOWA ZMIANA: WYRÓWNANIE DO LEWEJ */
+        /* WYRÓWNANIE ZAWARTOŚCI DO LEWEJ */
         text-align: left !important;
-        align-items: flex-start !important; 
+        align-items: flex-start !important;
         display: flex;
         flex-direction: column;
     }
@@ -90,12 +91,10 @@ st.markdown("""
         border-color: #666;
         background-color: #1c1f26;
     }
-    /* Ukrycie ikony chmury */
+    /* Opcjonalnie: ukrycie ikony chmury dla minimalizmu */
     [data-testid='stFileUploader'] svg { display: none; }
     
-    /* Usunięcie marginesu pod plikiem */
     .st-emotion-cache-1ae8axi { margin-bottom: 0px !important; }
-
 
     /* 3. BUTTONY GŁÓWNE */
     div.stButton > button {
@@ -229,7 +228,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.15</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.16</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -294,7 +293,7 @@ with st.sidebar:
 
 # --- GŁÓWNY INTERFEJS ---
 
-# 1. IMPORT (Left Aligned via CSS)
+# 1. IMPORT (Left Aligned & Narrow)
 uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
 
 audio_to_proc = None
@@ -307,7 +306,8 @@ if uploaded:
     if audio_to_proc: info.append(f"Audio: {audio_to_proc.name}")
     if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
     if info: 
-        st.markdown(f"<div style='text-align: center; color: #888; font-size: 12px; margin-top: -10px;'>{' • '.join(info)}</div>", unsafe_allow_html=True)
+        # Informacja o plikach - też wyrównana do lewej (z małym wcięciem)
+        st.markdown(f"<div style='text-align: left; color: #888; font-size: 12px; margin-top: -10px; padding-left: 5px;'>{' • '.join(info)}</div>", unsafe_allow_html=True)
 
 # 2. NOTATKA
 pasted_text = st.text_area("notatki", height=120, placeholder="Wklej notatki, linki lub kontekst...", label_visibility="collapsed")
