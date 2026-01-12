@@ -42,10 +42,10 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (HARDCORE CUSTOMIZATION) ---
+# --- CSS (TRUNCATE BUTTONS & TINY TRASH) ---
 st.markdown("""
 <style>
-    /* 1. TYPOGRAFIA */
+    /* 1. TYPOGRAFIA I NAGŁÓWEK */
     h1 {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-weight: 200 !important;
@@ -62,8 +62,8 @@ st.markdown("""
         margin-bottom: 20px;
     }
 
-    /* 2. UPLOADER */
-    [data-testid='stFileUploader'] section > div:first-child span { display: none; }
+    /* 2. UPLOADER (MINIMALIST) */
+    [data-testid='stFileUploader'] section > div:first-child span, 
     [data-testid='stFileUploader'] section > div:first-child small { display: none; }
     
     [data-testid='stFileUploader'] section > div:first-child::before {
@@ -81,36 +81,51 @@ st.markdown("""
     [data-testid='stFileUploader'] section:hover { border-color: #888; background-color: #1c1f26; }
     [data-testid='stFileUploader'] svg { display: none; }
 
-    /* 3. BUTTONS (GLOBAL) */
+    /* 3. BUTTONY GŁÓWNE */
     div.stButton > button {
         background-color: #2b2d35; color: #ffffff; border: 1px solid #41444e;
         border-radius: 4px; font-size: 14px; padding: 0.5rem 1rem; width: 100%;
     }
     div.stButton > button:hover { background-color: #ffffff; color: #000000; border-color: #ffffff; }
 
-    /* 4. SIDEBAR SPECIFIC (COMPACT HISTORY) */
-    /* Zmniejszamy przyciski w sidebarze, żeby historia była gęstsza */
-    [data-testid="stSidebar"] div.stButton > button {
-        padding: 4px 8px !important; /* Bardzo mały padding */
-        font-size: 13px !important;
-        height: auto !important;
-        min-height: 0px !important;
-        margin-top: 0px !important;
-        margin-bottom: 0px !important;
-        line-height: 1.2 !important;
+    /* 4. HISTORIA - UCINANIE TEKSTU (TRUNCATE) */
+    /* To sprawia, że przycisk nie rośnie w dół, a tekst ma "..." */
+    [data-testid="stSidebar"] div.stButton > button p {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        width: 100%;
+        display: block;
     }
     
-    /* Zmniejszenie odstępów między kolumnami w historii */
-    [data-testid="stSidebar"] [data-testid="column"] {
-        padding: 0px 2px !important;
+    /* Zmniejszenie paddingu przycisków w sidebarze */
+    [data-testid="stSidebar"] div.stButton > button {
+        padding: 0.25rem 0.5rem !important;
     }
 
-    /* Ukrycie standardowych marginesów kontenerów w sidebarze */
-    [data-testid="stSidebar"] .block-container {
-        padding-top: 2rem;
+    /* 5. PRZYCISK USUWANIA (IKONA KOSZA) */
+    /* Ten styl dotyczy tylko małych przycisków w drugiej kolumnie historii */
+    .trash-btn > button {
+        border: none !important;
+        background: transparent !important;
+        color: #666 !important;
+        padding: 0px !important;
+        font-size: 14px !important;
+        min-height: 0px !important;
+        height: auto !important;
+        margin-top: -5px !important; /* Podciągamy go do góry */
+    }
+    .trash-btn > button:hover {
+        color: #ef5350 !important; /* Czerwony po najechaniu */
+        background: transparent !important;
+    }
+    .trash-btn > button:active, .trash-btn > button:focus {
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
     }
 
-    /* 5. HISTORIA */
+    /* Ukrycie deploy i code block styling */
     div[data-testid="stCodeBlock"] { border: 1px solid #333; background-color: #0e1117; }
     .stDeployButton {display:none;}
     div[data-testid="stSidebar"] button { text-align: left; }
@@ -215,7 +230,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.7</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.8</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -228,7 +243,6 @@ with st.sidebar:
     st.divider()
     typ_tekstu = st.radio("Rodzaj:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     
-    # SUWAK I STATUS
     target_chars = st.slider("Cel znaków (treść):", 500, 15000, value=3500, step=500)
     target_words = int(target_chars / 7)
     st.caption(f"Cel: ~{target_words} słów.")
@@ -255,28 +269,37 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # HISTORIA KOMPAKTOWA
+    # HISTORIA (FIXED HEIGHT)
     st.divider()
     st.subheader("Historia")
     if st.session_state.history:
         for i, item in enumerate(st.session_state.history):
-            # Używamy CSS-owego ścisku. Layout 5:1
-            c1, c2 = st.columns([5, 1])
-            with c1:
-                # Główny przycisk z tytułem
-                if st.button(item.get('title','Bez tytułu'), key=f"l{i}", use_container_width=True):
-                    st.session_state.artykul = item['content']
-                    st.rerun()
-            with c2:
-                # Malutki przycisk kosza
-                st.button("🗑️", key=f"d{i}", on_click=delete_history_item, args=(i,), help="Usuń")
             
-            # Caption bardzo blisko przycisków
-            st.markdown(f"""
-            <div style="font-size: 10px; color: #666; margin-top: -12px; margin-bottom: 8px; margin-left: 4px;">
-                {item.get('type','AI')} | {item['time']} | {item.get('chars',0)}
-            </div>
-            """, unsafe_allow_html=True)
+            # 1. Przycisk Tytułu (Szeroki, tekst ucinany przez CSS)
+            if st.button(item.get('title','Bez tytułu'), key=f"l{i}", use_container_width=True):
+                st.session_state.artykul = item['content']
+                st.rerun()
+            
+            # 2. Rząd Metadanych i Kosza (Pod przyciskiem)
+            # Używamy proporcji [5, 1] aby kosz był całkiem po prawej
+            c_meta, c_del = st.columns([5, 1])
+            
+            with c_meta:
+                # Informacje małym druczkiem
+                st.markdown(f"""
+                <div style='font-size: 10px; color: #666; margin-top: -2px; overflow: hidden; white-space: nowrap;'>
+                    {item.get('type','AI')} | {item['time']}
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c_del:
+                # Kontener dla CSS-a (klasa .trash-btn)
+                st.markdown('<div class="trash-btn">', unsafe_allow_html=True)
+                st.button("🗑", key=f"d{i}", on_click=delete_history_item, args=(i,), help="Usuń")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+            # Cienki separator
+            st.markdown("<hr style='margin: 4px 0 12px 0; opacity: 0.1;'>", unsafe_allow_html=True)
             
         st.button("Wyczyść wszystko", on_click=clear_all_history)
     else: st.caption("Pusto.")
