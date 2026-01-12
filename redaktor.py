@@ -70,7 +70,7 @@ def add_to_history(text, type_label):
     st.session_state.history.insert(0, entry)
     save_history_to_disk(st.session_state.history)
 
-# --- CSS ---
+# --- CSS (Sticky Header & Scroll) ---
 st.markdown("""
 <style>
     div[data-testid="stCodeBlock"] {
@@ -96,7 +96,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v14.0")
+st.title("🖋️ Dziennikarz Master PRO v14.1")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -115,12 +115,43 @@ def read_text_file(uploaded_file):
     except: return ""
     return ""
 
-# --- PANEL BOCZNY ---
+# --- PANEL BOCZNY (Z PRZENIESIONYMI PRZYCISKAMI) ---
 with st.sidebar:
     st.header("⚙️ Ustawienia")
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     
+    # --- NOWA SEKCJA: STATUS I KOREKTA (Tylko gdy jest artykuł) ---
+    if "artykul" in st.session_state:
+        st.divider()
+        st.markdown("### 📊 Status i Korekta")
+        
+        tekst_obecny = st.session_state.artykul
+        netto = count_net_chars(tekst_obecny)
+        roznica = netto - target_chars
+        
+        # Licznik
+        st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
+        
+        # Przyciski korekty
+        col_k1, col_k2 = st.columns(2)
+        if col_k1.button("✂️ Skróć 20%"):
+            with st.spinner("Skracam..."):
+                prompt_short = f"Skróć o 20% (cel: {int(netto*0.8)}), ZAKAZ słowa 'kapłan':\n\n{tekst_obecny}"
+                res = model.generate_content(prompt_short)
+                st.session_state.artykul = res.text
+                add_to_history(res.text, f"{typ_tekstu} (Skrót)")
+                st.rerun()
+                
+        if col_k2.button("➕ Wydłuż 20%"):
+            with st.spinner("Wydłużam..."):
+                prompt_long = f"Wydłuż o 20% (cel: {int(netto*1.2)}), ZAKAZ cudzysłowów:\n\n{tekst_obecny}"
+                res = model.generate_content(prompt_long)
+                st.session_state.artykul = res.text
+                add_to_history(res.text, f"{typ_tekstu} (Długi)")
+                st.rerun()
+
+    # --- HISTORIA ---
     st.divider()
     st.subheader("🗄️ Historia (Trwała)")
     
@@ -154,7 +185,7 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- PEŁNE MANIFESTY (100% ORYGINAŁU) ---
+# --- PEŁNE MANIFESTY (100% TWOJEJ TREŚCI) ---
 
 # 1. WYWIAD
 manifest_wywiad_full = f"""
@@ -224,6 +255,7 @@ Checklista przed wysyłką wywiadu:
 [ ] Redakcja wypowiedzi rozmówcy jest do wersji „do druku” bez zmiany sensu, z poprawą składni i interpunkcji
 [ ] Usunięte są wypełniacze i nadmiarowe „ja” wszędzie tam, gdzie wystarcza czasownik
 [ ] Zwracam jedną spójną wersję ciągłą.
+[ ] Po tekście głównym dodaję sekcję „KOTWICE I PEREŁKI” – listę 3-5 najmocniejszych cytatów z rozmowy.
 """
 
 # 2. NEWS / REPORTAŻ
@@ -294,7 +326,7 @@ if typ_tekstu == "Wywiad":
 else:
     manifest = manifest_news_full
 
-# --- GENEROWANIE Z WYMUSZANIEM DŁUGOŚCI ---
+# --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
     
     # 1. Budowa promptu bazowego
@@ -311,21 +343,13 @@ if st.button("🚀 Generuj Materiał"):
                 audio_file = genai.get_file(audio_file.name)
             content_payload.append(audio_file)
 
-    # 3. DODANIE "STRAŻNIKA DŁUGOŚCI" NA KOŃCU PROMPTU
-    # To jest kluczowe dla v14.0 - instrukcja na końcu, która ma priorytet
+    # 3. STRAŻNIK DŁUGOŚCI (NA KOŃCU)
     length_enforcer = f"""
-    
     *** INSTRUKCJA PRIORYTETOWA (DŁUGOŚĆ) ***
-    Użytkownik ustawił limit: {target_chars} znaków.
-    
-    TWOJE ZADANIE DOTYCZĄCE OBJĘTOŚCI:
-    1. Musisz celować w przedział {int(target_chars * 0.9)} - {int(target_chars * 1.1)} znaków netto.
-    2. JEŚLI MATERIAŁU JEST ZA DUŻO: Dokonaj selekcji wątków. Odrzuć mniej istotne, ale te, które zostawisz - opisz SZEROKO (zgodnie z zasadą anty-kompresji). Lepiej opisać 3 wątki głęboko niż 10 po łebkach.
-    3. JEŚLI MATERIAŁU JEST ZA MAŁO: Wykorzystaj 100% materiału i zadbaj o bogaty styl.
-    
-    Nie pisz elaboratów na 20 tys. znaków, jeśli limit to {target_chars}. Bądź precyzyjny.
+    Użytkownik ustawił limit: {target_chars} znaków netto.
+    Obowiązek: Celuj w przedział {int(target_chars * 0.9)} - {int(target_chars * 1.1)} znaków.
+    Jeśli materiału jest za dużo - selekcjonuj wątki, ale nie streszczaj tych wybranych.
     """
-    
     content_payload.append(length_enforcer)
 
     with st.spinner("Generowanie tekstu..."):
@@ -336,37 +360,13 @@ if st.button("🚀 Generuj Materiał"):
             add_to_history(new_text, typ_tekstu)
         except Exception as e: st.error(f"Błąd: {e}")
 
-# --- WYNIKI ---
+# --- WYNIKI: GŁÓWNE OKNO ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
-    netto = count_net_chars(tekst)
-    roznica = netto - target_chars
     
-    # 1. Narzędzia
-    c1, c2, c3 = st.columns([1, 1, 2])
-    
-    if c1.button("✂️ Skróć 20%"):
-        with st.spinner("Skracam..."):
-            prompt_short = f"Skróć o 20% (cel: {int(netto*0.8)}), ZAKAZ słowa 'kapłan':\n\n{tekst}"
-            res = model.generate_content(prompt_short)
-            st.session_state.artykul = res.text
-            add_to_history(res.text, f"{typ_tekstu} (Skrót)")
-            st.rerun()
-            
-    if c2.button("➕ Wydłuż 20%"):
-        with st.spinner("Wydłużam..."):
-            prompt_long = f"Wydłuż o 20% (cel: {int(netto*1.2)}), ZAKAZ cudzysłowów:\n\n{tekst}"
-            res = model.generate_content(prompt_long)
-            st.session_state.artykul = res.text
-            add_to_history(res.text, f"{typ_tekstu} (Długi)")
-            st.rerun()
-            
-    with c3:
-         st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
-
-    # 2. OKNO WYNIKU
+    # GŁÓWNE OKNO (Standardowe st.code + CSS Fix)
     st.subheader("Gotowy Artykuł:")
     st.code(tekst, language="markdown", wrap_lines=True)
     
-    # 3. Pobieranie
+    # Pobieranie
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
