@@ -23,29 +23,25 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- TRWAŁA HISTORIA (Nowość v13.6) ---
+# --- TRWAŁA HISTORIA ---
 HISTORY_FILE = "historia_redaktora.json"
 
 def load_history_from_disk():
-    """Ładuje historię z pliku JSON przy starcie."""
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except:
-            return []
+        except: return []
     return []
 
 def save_history_to_disk(history_list):
-    """Zapisuje całą historię do pliku JSON."""
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history_list, f, ensure_ascii=False, indent=4)
 
-# Inicjalizacja stanu (ładujemy z dysku, jeśli session_state jest pusty)
 if "history" not in st.session_state:
     st.session_state.history = load_history_from_disk()
 
-# --- CSS: FIXED SCROLL (To co działało w v13.2) ---
+# --- CSS: FIXED SCROLL ---
 st.markdown("""
 <style>
     div[data-testid="stCodeBlock"] {
@@ -70,7 +66,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v13.6")
+st.title("🖋️ Dziennikarz Master PRO v13.7")
 
 # --- POMOCNIKI ---
 def count_net_chars(text):
@@ -90,17 +86,14 @@ def read_text_file(uploaded_file):
     return ""
 
 def add_to_history(text, type_label):
-    """Dodaje wpis do RAM i na Dysk."""
-    timestamp = datetime.now().strftime("%d-%m %H:%M") # Dodano datę
+    timestamp = datetime.now().strftime("%d-%m %H:%M")
     entry = {
         "time": timestamp,
         "type": type_label,
         "content": text,
         "chars": count_net_chars(text)
     }
-    # 1. Dodaj do sesji (RAM)
     st.session_state.history.insert(0, entry)
-    # 2. Zapisz na dysk (TRWAŁOŚĆ)
     save_history_to_disk(st.session_state.history)
 
 # --- PANEL BOCZNY ---
@@ -109,27 +102,22 @@ with st.sidebar:
     typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
     target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
     
-    # --- HISTORIA (TRWAŁA) ---
     st.divider()
     st.subheader("🗄️ Historia (Trwała)")
-    
     if len(st.session_state.history) > 0:
         for i, item in enumerate(st.session_state.history):
-            # Unikalny klucz przycisku
             btn_key = f"hist_{i}_{item['time']}"
             label = f"{item['time']} | {item['type']} ({item['chars']})"
-            
             if st.button(label, key=btn_key):
                 st.session_state.artykul = item['content']
                 st.rerun()
-        
         st.markdown("---")
-        if st.button("🗑️ Usuń wszystko (trwale)"):
+        if st.button("🗑️ Usuń wszystko"):
             st.session_state.history = []
-            save_history_to_disk([]) # Czyścimy plik
+            save_history_to_disk([])
             st.rerun()
     else:
-        st.caption("Historia jest pusta.")
+        st.caption("Pusto.")
 
 # --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
@@ -145,30 +133,106 @@ if uploaded_files:
     for f in uploaded_files:
         all_source += f"\n\n--- {f.name} ---\n" + read_text_file(f)
 
-# --- MANIFESTY (PEŁNE Z TWOICH PLIKÓW) ---
+# --- PEŁNE MANIFESTY (WKLEJONE W CAŁOŚCI Z TWOICH PLIKÓW) ---
+
 manifest_wywiad = f"""
-Jesteś redaktorem Master PRO. Tworzysz WYWIAD w formie Q/A.
-ZASADY (Baza + Twoje Manifesty):
-- Cel: ok. {target_chars} znaków netto.
-- ZAKAZ METAJĘZYKA (np. "w tej rozmowie", "pada przykład", "wróćmy do"). Pytania jako bezpośredni zwrot (2. osoba).
-- ANTY-KOMPRESJA: Zachowuj sceny, przykłady, dopowiedzenia. Nie spłaszczaj do streszczeń.
-- REDAKCJA: Język mówiony -> pisany (bez zmiany sensu). Usuń "yyy", powtórzenia i nadmiarowe "ja".
-- STRUKTURA: Q/A. Nagłówki: Nadtytuł, Tytuł (max 3 słowa), Lid (na "O").
-- KOTWICE: Na końcu wylistuj "perełki" (najmocniejsze cytaty).
-- ZAKAZ słowa "kapłan" (używaj: ksiądz, duchowny etc.).
+TRYB: WYWIAD
+CEL DŁUGOŚCI: ok. {target_chars} znaków netto (bez enterów).
+
+1) Tryb i cel
+Redaguję materiał do formy Q/A.
+Robię porządną redakcję językową wypowiedzi rozmówcy.
+Nie dodaję treści. Porządkuję, wygładzam, układam.
+
+2) Zasada nadrzędna pracy na źródle
+Pracuję wyłącznie na materiale źródłowym podanym przez Ciebie.
+Nie dopisuję faktów, nazwisk, liczb ani kontekstów spoza transkrypcji.
+
+3) Zakazy stylu w pytaniach i przejściach
+Zakaz metajęzyka i „głosu narratora”. Nie używam sformułowań typu:
+„w rozmowie”, „w tej rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”, „wróćmy do”, „mówiłaś o…”, jeśli wątek nie padł przed chwilą.
+Pytania mają brzmieć jak bezpośredni zwrot prowadzącego do rozmówcy (2. osoba).
+
+4) Anty-kompresja
+Nie spłaszczam wypowiedzi do streszczeń.
+Zachowuję sceny, przykłady, dopowiedzenia, mikrokontrpytania.
+Skracam najpierw: oczywiste powtórzenia, „yyy/eee”, dygresje techniczne.
+
+5) Mniej pytań, większa głębia
+„Mniej pytań” oznacza większe pytania + ewentualnie krótkie mikrokontrpytania.
+Nie tnę odpowiedzi tylko po to, by było krócej.
+
+6) Spójność pytań
+Nie używam odwołań typu „wspominałeś wcześniej”, jeśli temat nie padł w poprzednim pytaniu.
+Jeśli temat pochodzi z odległej części transkrypcji, wprowadzam go w pytaniu tak, jakby był nowy.
+
+7) Redakcja wypowiedzi
+Zachowuję styl rozmówcy, ale w wersji „do druku”.
+Usuwam: „no”, „jakby”, „w sumie”, „nie?”.
+Poprawiam składnię, interpunkcję, dzielę tasiemcowe zdania.
+Usuwam nadmiarowe „ja” (np. „ja myślę” -> „myślę”), chyba że służy kontrastowi.
+
+8) Stała preferencja językowa
+Nie używam słowa „kapłan” i jego odmian.
+
+9) Struktura nagłówków
+Zawsze daję zestaw:
+- Nadtytuł
+- Tytuł (max 3 słowa)
+- Lid (1-2 zdania).
+LID W WYWIADZIE: Każdy musi zaczynać się od słowa „O”. Forma: O [czymś], o [czymś] mówi [kto].
+
+10) Checklista końcowa
+- Czy jest forma Q/A (P: / O:)?
+- Czy usunięto metajęzyk?
+- Czy neologizmy są poprawione?
+- Czy jest sekcja ZAMIANY na końcu (jeśli były neologizmy)?
 """
 
 manifest_news = f"""
-Jesteś redaktorem Master PRO. Tworzysz NEWS / REPORTAŻ.
-ZASADY (Baza + Twoje Manifesty):
-- Cel: ok. {target_chars} znaków netto.
-- STRUKTURA: Nadtytuł, Tytuł, Lid.
-- BONUS: Dodaj 5 propozycji tytułów i 3 propozycji lidów.
-- ZAKAZ: Powtórzeń słów w nagłówkach. Lid i 1. akapit nie od daty.
-- STYL: Reporterski, precyzyjny. Bez "te słowa pokazują".
-- CYTATY: Bez cudzysłowów, w ramce pauzowej (– ... –). Min. 4 zdania w cytacie.
-- KONTEKST: Min. 3 zdania przed i po cytacie.
-- ZAKAZ słowa "kapłan".
+TRYB: ARTYKUŁ / NEWS / REPORTAŻ
+CEL DŁUGOŚCI: ok. {target_chars} znaków netto (bez enterów).
+
+1) Materiał i fakty
+Pracuję wyłącznie na materiale źródłowym.
+Nie dopisuję faktów, nazwisk, liczb ani kontekstów spoza materiału.
+
+2) Zestaw nagłówków na start
+Zawsze: Nadtytuł, Tytuł, Lid.
+Automatycznie dodaję też:
+- 5 propozycji tytułów (max 3 słowa).
+- 3 propozycje lidów.
+ZAKAZ powtórzeń słów między nadtytułem, tytułem i lidem.
+Lid i pierwszy akapit NIE mogą zaczynać się od daty.
+
+3) Struktura tekstu głównego
+Tekst ma brzmieć jak relacja prasowa, nie streszczenie.
+Zwykle 6–10 akapitów.
+Śródtytuły (opcjonalnie) – metaforyczne, nie na samym początku.
+
+4) Styl i zakazy językowe
+Styl reporterski, precyzyjny. Bez klisz.
+Unikam zdań: „te słowa pokazują…”, „w tych zdaniach streszcza się…”.
+ZAKAZ: Średników (;) i dwukropków (:).
+ZAKAZ: Myślników w tekście własnym (wyjątek: cytaty).
+ZAKAZ słowa „kapłan”.
+
+5) Zasady cytowania (BARDZO WAŻNE)
+- Cytaty BEZ CUDZYSŁOWÓW.
+- Format: – Treść cytatu. Treść cytatu. – atrybucja.
+- Długość: Minimum 4 zdania w cytacie.
+- Kontekst: Minimum 3 zdania własne przed cytatem i 3 po cytacie.
+- Interpunkcja: Kropka na końcu cytatu wewnątrz pauz jest błędem, jeśli następuje atrybucja.
+- Przykład poprawny: – To jest zdanie. To drugie zdanie. – mówi rozmówca.
+
+6) Zakończenie
+Domknij konkretem, informacją organizacyjną lub cytatem-puentą.
+Nie kończ ogólną refleksją, podsumowaniem „znaczenia wydarzenia”.
+
+7) Checklista
+- Czy usunięto słowo „kapłan”?
+- Czy cytaty są bez cudzysłowów?
+- Czy zachowano proporcje cytatów (min. 4 zdania)?
 """
 
 if typ_tekstu == "Wywiad":
@@ -195,7 +259,6 @@ if st.button("🚀 Generuj Materiał"):
             response = model.generate_content(content)
             new_text = response.text
             st.session_state.artykul = new_text
-            # ZAPIS TRWAŁY
             add_to_history(new_text, typ_tekstu)
         except Exception as e: st.error(f"Błąd: {e}")
 
@@ -205,9 +268,7 @@ if "artykul" in st.session_state:
     netto = count_net_chars(tekst)
     roznica = netto - target_chars
     
-    # 1. Narzędzia
     c1, c2, c3 = st.columns([1, 1, 2])
-    
     if c1.button("✂️ Skróć 20%"):
         with st.spinner("Skracam..."):
             res = model.generate_content(f"Skróć o 20%:\n\n{tekst}")
@@ -225,9 +286,6 @@ if "artykul" in st.session_state:
     with c3:
          st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} vs cel", delta_color="inverse")
 
-    # 2. OKNO WYNIKU
     st.subheader("Gotowy Artykuł:")
     st.code(tekst, language="markdown", wrap_lines=True)
-    
-    # 3. Pobieranie
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
