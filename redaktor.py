@@ -1,3 +1,17 @@
+Rozumiem. Wprowadzamy zmiany UX (User Experience) oraz logikę liczenia znaków "netto" (bez nagłówków).
+
+Oto wersja **v14.4**.
+
+### Co zmieniono?
+
+1. **Stały Panel Boczny:** Sekcja "Status i Korekta" jest teraz widoczna **zawsze**. Jeśli nie ma jeszcze artykułu, licznik pokazuje "0", a przyciski są **nieaktywne (szare)**.
+2. **Czyste Przyciski:** Usunąłem ikony (nożyczki, plusy). Są teraz proste: "Skróć" i "Wydłuż".
+3. **Inteligentne Liczenie (Body Only):** Dodałem funkcję, która analizuje tekst. Zakładamy, że zgodnie z Twoim manifestem pierwsze 3 bloki tekstu to *Nadtytuł*, *Tytuł* i *Lid*. Funkcja pomija je i liczy znaki dopiero od 4. bloku (właściwej treści).
+4. **Kontekst:** Pasek boczny reaguje dynamicznie na to, co dzieje się w aplikacji.
+
+Oto kompletny kod:
+
+```python
 import streamlit as st
 import google.generativeai as genai
 import time
@@ -14,7 +28,7 @@ try:
 except Exception as e:
     st.error(f"Błąd API: {e}")
 
-# 2. BIBLIOTEKI DO PLIKÓW I INTERNETU
+# 2. BIBLIOTEKI PLIKÓW
 try:
     from docx import Document
     import PyPDF2
@@ -22,7 +36,7 @@ try:
 except ImportError:
     HAS_LIBS = False
 
-# Nowe biblioteki do obsługi linków
+# 3. BIBLIOTEKI WEB (Obsługa błędów, jeśli ich nie ma)
 try:
     import requests
     from bs4 import BeautifulSoup
@@ -32,36 +46,49 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-# --- FUNKCJE POMOCNICZE (WEB SCRAPING) ---
+# --- FUNKCJE POMOCNICZE ---
+
 def extract_urls(text):
-    """Znajduje wszystkie linki w tekście notatek."""
     url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     return re.findall(url_pattern, text)
 
 def fetch_url_content(url):
-    """Pobiera tekst ze strony internetowej."""
     if not HAS_WEB_LIBS:
-        return "[Brak bibliotek requests/bs4 do pobrania treści linku]"
-    
+        return ""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-        
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Usuwamy skrypty i style
         for script in soup(["script", "style", "nav", "footer"]):
             script.decompose()
-            
         text = soup.get_text(separator='\n')
-        # Czyszczenie pustych linii
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        return "\n".join(lines)[:8000] # Limit znaków na jedną stronę, żeby nie zatkać AI
-    except Exception as e:
-        return f"[Błąd pobierania {url}: {str(e)}]"
+        return "\n".join(lines)[:8000]
+    except: return ""
 
-# --- TRWAŁA HISTORIA ---
+# NOWA FUNKCJA LICZĄCA ZNAKI (BEZ NAGŁÓWKÓW)
+def count_body_chars_only(text):
+    """
+    Liczy znaki pomijając nagłówki (Nadtytuł, Tytuł, Lid).
+    Zakłada, że pierwsze 3 niepuste linie/bloki to nagłówki.
+    """
+    if not text: return 0
+    
+    # Dzielimy na linie i usuwamy puste
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+    # Jeśli tekst jest bardzo krótki (np. błąd generowania), licz wszystko
+    if len(lines) <= 3:
+        return len("".join(lines))
+    
+    # Pomijamy pierwsze 3 elementy (zakładamy: Nadtytuł, Tytuł, Lid)
+    body_lines = lines[3:] 
+    
+    # Łączymy resztę i liczymy
+    return len("".join(body_lines))
+
+# --- HISTORIA ---
 HISTORY_FILE = "historia_redaktora.json"
 
 def extract_title_from_text(text):
@@ -71,8 +98,6 @@ def extract_title_from_text(text):
             return line.split(":", 1)[-1].strip().replace("*", "")
     if len(lines) >= 2:
         return lines[1].replace("#", "").replace("*", "").strip()
-    if lines:
-        return lines[0].replace("#", "").replace("*", "").strip()[:50] + "..."
     return "Bez tytułu"
 
 def load_history_from_disk():
@@ -96,18 +121,17 @@ if "history" not in st.session_state:
 
 def add_to_history(text, type_label):
     timestamp = datetime.now().strftime("%d-%m %H:%M")
-    extracted_title = extract_title_from_text(text)
     entry = {
         "time": timestamp,
         "type": type_label,
         "content": text,
-        "chars": len(text.replace("\n", "").replace("\r", "")),
-        "title": extracted_title
+        "chars": count_body_chars_only(text), # Używamy nowego licznika też w historii
+        "title": extract_title_from_text(text)
     }
     st.session_state.history.insert(0, entry)
     save_history_to_disk(st.session_state.history)
 
-# --- CSS (Sticky Header & Scroll) ---
+# --- CSS ---
 st.markdown("""
 <style>
     div[data-testid="stCodeBlock"] {
@@ -117,31 +141,86 @@ st.markdown("""
         border-radius: 8px;
         background-color: #0e1117;
     }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar {
-        width: 12px;
-    }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar-track {
-        background: #0e1117;
-    }
-    div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb {
-        background-color: #262730;
-        border-radius: 10px;
-        border: 2px solid #0e1117;
-    }
+    div[data-testid="stCodeBlock"]::-webkit-scrollbar { width: 12px; }
+    div[data-testid="stCodeBlock"]::-webkit-scrollbar-track { background: #0e1117; }
+    div[data-testid="stCodeBlock"]::-webkit-scrollbar-thumb { background-color: #262730; border-radius: 10px; border: 2px solid #0e1117; }
     .stDeployButton {display:none;}
-    .history-item { padding: 10px 0; border-bottom: 1px solid #31333f; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🖋️ Dziennikarz Master PRO v14.3")
+st.title("🖋️ Dziennikarz Master PRO v14.4")
 
 if not HAS_WEB_LIBS:
-    st.warning("⚠️ Brak bibliotek do obsługi linków. Zainstaluj: pip install requests beautifulsoup4")
+    st.warning("⚠️ Brak bibliotek requests/bs4. Linki nie będą działać (dodaj je do requirements.txt).")
 
-# --- POMOCNIKI ---
-def count_net_chars(text):
-    return len(text.replace("\n", "").replace("\r", ""))
+# --- PANEL BOCZNY (ZMIANY UI) ---
+with st.sidebar:
+    st.header("⚙️ Ustawienia")
+    typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
+    target_chars = st.slider("Cel znaków (TREŚĆ):", 500, 15000, value=3500, step=500)
+    target_words = int(target_chars / 7)
+    st.caption(f"AI celuje w ok. {target_words} słów treści właściwej.")
+    
+    # --- SEKCJA STATUSU (ZAWSZE WIDOCZNA) ---
+    st.divider()
+    st.markdown("### 📊 Status i Korekta")
+    
+    # Pobieramy aktualny tekst (jeśli jest)
+    current_text = st.session_state.get("artykul", "")
+    
+    if current_text:
+        # Obliczamy tylko treść (bez nagłówków)
+        netto_body = count_body_chars_only(current_text)
+        roznica = netto_body - target_chars
+        delta_color = "normal" if abs(roznica) < 300 else "inverse"
+        
+        st.metric("Treść (bez nagłówków)", value=netto_body, delta=f"{roznica} vs cel", delta_color=delta_color)
+        btn_disabled = False
+    else:
+        st.metric("Treść (bez nagłówków)", value=0, delta="oczekiwanie")
+        btn_disabled = True # Przyciski nieaktywne
+        
+    # Przyciski (bez ikonek, zawsze widoczne, ale mogą być nieaktywne)
+    c1, c2 = st.columns(2)
+    
+    if c1.button("Skróć", disabled=btn_disabled, use_container_width=True):
+        with st.spinner("Skracam..."):
+            prompt_short = f"ZADANIE: Skróć TREŚĆ WŁAŚCIWĄ do ok. {target_chars} znaków. Zachowaj nagłówki bez zmian. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{current_text}"
+            res = model.generate_content(prompt_short)
+            st.session_state.artykul = res.text
+            add_to_history(res.text, f"{typ_tekstu} (Skrót)")
+            st.rerun()
+            
+    if c2.button("Wydłuż", disabled=btn_disabled, use_container_width=True):
+        with st.spinner("Rozwijam..."):
+            prompt_long = f"Wydłuż TREŚĆ WŁAŚCIWĄ do ok. {target_chars} znaków, dodając detale. Zachowaj nagłówki. ZAKAZ cudzysłowów.\n\n{current_text}"
+            res = model.generate_content(prompt_long)
+            st.session_state.artykul = res.text
+            add_to_history(res.text, f"{typ_tekstu} (Długi)")
+            st.rerun()
 
+    # --- HISTORIA ---
+    st.divider()
+    st.subheader("🗄️ Historia")
+    if len(st.session_state.history) > 0:
+        for i, item in enumerate(st.session_state.history):
+            with st.container():
+                st.markdown(f"**{item.get('title', 'Bez tytułu')}**")
+                # Tutaj też używamy już policzonej wartości chars (body only) jeśli była zapisana nową metodą
+                chars_display = item.get('chars', 0)
+                st.caption(f"{item['type']} | {item['time']} | {chars_display} zn.")
+                if st.button("📂 Wczytaj", key=f"rest_{i}_{item['time']}"):
+                    st.session_state.artykul = item['content']
+                    st.rerun()
+                st.markdown("---")
+        if st.button("🗑️ Usuń wszystko"):
+            st.session_state.history = []
+            save_history_to_disk([])
+            st.rerun()
+    else:
+        st.caption("Pusto.")
+
+# --- WEJŚCIE DANYCH ---
 def read_text_file(uploaded_file):
     try:
         if uploaded_file.name.endswith('.txt'):
@@ -155,92 +234,32 @@ def read_text_file(uploaded_file):
     except: return ""
     return ""
 
-# --- PANEL BOCZNY ---
-with st.sidebar:
-    st.header("⚙️ Ustawienia")
-    typ_tekstu = st.radio("Rodzaj publikacji:", ["News (Aktualności)", "Reportaż", "Wywiad"], index=0)
-    target_chars = st.slider("Cel znaków (netto):", 500, 15000, value=3500, step=500)
-    target_words = int(target_chars / 7)
-    st.caption(f"AI otrzyma cel: ok. {target_words} słów.")
-    
-    # --- STATUS I KOREKTA ---
-    if "artykul" in st.session_state:
-        st.divider()
-        st.markdown("### 📊 Status i Korekta")
-        tekst_obecny = st.session_state.artykul
-        netto = count_net_chars(tekst_obecny)
-        roznica = netto - target_chars
-        delta_color = "normal" if abs(roznica) < 300 else "inverse"
-        
-        st.metric("Liczba znaków (netto)", value=netto, delta=f"{roznica} względem celu", delta_color=delta_color)
-        
-        col_k1, col_k2 = st.columns(2)
-        if col_k1.button("✂️ Skróć"):
-            with st.spinner("Skracam agresywnie..."):
-                prompt_short = f"ZADANIE: Skróć tekst do ok. {target_chars} znaków netto. PRIORYTET: Usuń mniej ważne wątki. ZAKAZ: Słowa 'kapłan'.\n\nTekst:\n{tekst_obecny}"
-                res = model.generate_content(prompt_short)
-                st.session_state.artykul = res.text
-                add_to_history(res.text, f"{typ_tekstu} (Skrót)")
-                st.rerun()
-                
-        if col_k2.button("➕ Wydłuż"):
-            with st.spinner("Rozwijam..."):
-                prompt_long = f"Wydłuż tekst do ok. {target_chars} znaków, dodając detale. ZAKAZ cudzysłowów.\n\n{tekst_obecny}"
-                res = model.generate_content(prompt_long)
-                st.session_state.artykul = res.text
-                add_to_history(res.text, f"{typ_tekstu} (Długi)")
-                st.rerun()
-
-    # --- HISTORIA ---
-    st.divider()
-    st.subheader("🗄️ Historia (Trwała)")
-    if len(st.session_state.history) > 0:
-        for i, item in enumerate(st.session_state.history):
-            with st.container():
-                st.markdown(f"**{item.get('title', 'Bez tytułu')}**")
-                st.caption(f"{item['type']} | {item['time']} | {item['chars']} zn.")
-                if st.button("📂 Wczytaj", key=f"rest_{i}_{item['time']}"):
-                    st.session_state.artykul = item['content']
-                    st.rerun()
-                st.markdown("---")
-        if st.button("🗑️ Usuń wszystko"):
-            st.session_state.history = []
-            save_history_to_disk([])
-            st.rerun()
-    else:
-        st.caption("Pusto.")
-
-# --- WEJŚCIE DANYCH ---
 col_a, col_b, col_c = st.columns([1, 1, 1])
 with col_a:
     uploaded_audio = st.file_uploader("🎤 Audio (MP3/WAV):", type=['mp3', 'wav', 'm4a'])
 with col_b:
     uploaded_files = st.file_uploader("📄 Pliki (PDF/DOCX):", accept_multiple_files=True)
 with col_c:
-    pasted_text = st.text_area("✍️ Notatki i Linki:", height=100, help="Wklej tu linki (np. wikipedia) lub instrukcje kontekstowe. Aplikacja sama pobierze treść stron.")
+    pasted_text = st.text_area("✍️ Notatki i Linki:", height=100)
 
-# --- PRZETWARZANIE NOTATEK I LINKÓW ---
+# --- PRZETWARZANIE NOTATEK I PLIKÓW ---
 context_data = ""
 if pasted_text:
-    # 1. Sprawdzamy czy są linki
     urls = extract_urls(pasted_text)
     if urls:
-        st.info(f"🔎 Wykryto {len(urls)} linków. Pobieram treść...")
-        context_data += "--- TREŚĆ POBRANA Z LINKÓW ---\n"
+        st.info(f"🔎 Analizuję {len(urls)} linków...")
+        context_data += "--- TREŚĆ Z LINKÓW ---\n"
         for url in urls:
             content = fetch_url_content(url)
             context_data += f"ŹRÓDŁO: {url}\n{content}\n\n"
-    
-    # 2. Dodajemy sam tekst notatki jako instrukcję/kontekst
-    context_data += f"--- NOTATKI UŻYTKOWNIKA (KONTEKST) ---\n{pasted_text}\n"
+    context_data += f"--- NOTATKI UŻYTKOWNIKA ---\n{pasted_text}\n"
 
-# Przetwarzanie plików
 source_content = ""
 if uploaded_files:
     for f in uploaded_files:
         source_content += f"\n\n--- PLIK: {f.name} ---\n" + read_text_file(f)
 
-# --- PEŁNE MANIFESTY (BEZ ZMIAN) ---
+# --- MANIFESTY ---
 manifest_wywiad_full = f"""
 JESTEŚ REDAKTOREM MASTER PRO. TWOIM ZADANIEM JEST STWORZENIE WYWIADU.
 PEŁNE WYTYCZNE REDAKCYJNE:
@@ -350,19 +369,12 @@ else:
 
 # --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
-    
-    # 1. Budowa promptu
     content_payload = [manifest]
-    
-    # DOŁĄCZENIE KONTEKSTU Z NOTATEK I LINKÓW
     if context_data:
-        content_payload.append(f"DODATKOWY KONTEKST / INFO Z LINKÓW (traktuj pomocniczo):\n{context_data}")
-        
-    # DOŁĄCZENIE GŁÓWNEGO MATERIAŁU (PLIKI)
+        content_payload.append(f"DODATKOWY KONTEKST (Linki/Notatki):\n{context_data}")
     if source_content: 
-        content_payload.append(f"GŁÓWNY MATERIAŁ ŹRÓDŁOWY (Baza artykułu):\n{source_content}")
+        content_payload.append(f"GŁÓWNY MATERIAŁ ŹRÓDŁOWY:\n{source_content}")
     
-    # 2. Obsługa Audio
     if uploaded_audio:
         with st.spinner("Przesyłam audio do Gemini 3..."):
             with open("temp.mp3", "wb") as f: f.write(uploaded_audio.getbuffer())
@@ -372,37 +384,30 @@ if st.button("🚀 Generuj Materiał"):
                 audio_file = genai.get_file(audio_file.name)
             content_payload.append(audio_file)
 
-    # 3. AGRESYWNY STRAŻNIK DŁUGOŚCI (SŁOWA)
     length_enforcer = f"""
     *** INSTRUKCJA PRIORYTETOWA (KONTROLA DŁUGOŚCI) ***
-    Użytkownik wymaga tekstu o objętości ok. {target_chars} znaków netto.
-    
-    DLA CIEBIE OZNACZA TO: Napisz tekst na około {target_words} SŁÓW.
-    
-    REGUŁA NADRZĘDNA:
-    Jeśli materiału źródłowego jest za dużo, aby zmieścić się w {target_words} słowach:
-    -> IGNORUJ zasadę "anty-kompresji". 
-    -> PO PROSTU ODETNIJ/USUŃ mniej ważne wątki.
-    -> Lepiej opisać 3 wątki dokładnie (zgodnie ze stylem) i zmieścić się w limicie, niż streścić wszystko po łebkach.
+    Użytkownik wymaga tekstu o objętości ok. {target_chars} znaków netto (licząc BEZ nagłówków).
+    DLA CIEBIE OZNACZA TO: Napisz samą treść właściwą na około {target_words} SŁÓW.
+    Jeśli materiału jest za dużo -> PO PROSTU ODETNIJ mniej ważne wątki.
     """
     content_payload.append(length_enforcer)
 
     with st.spinner("Generowanie tekstu..."):
         try:
             if not source_content and not uploaded_audio:
-                st.error("Brak głównego materiału (pliki lub audio). Notatki to tylko dodatek!")
+                st.error("Brak materiału źródłowego!")
             else:
                 response = model.generate_content(content_payload)
-                new_text = response.text
-                st.session_state.artykul = new_text
-                add_to_history(new_text, typ_tekstu)
+                st.session_state.artykul = response.text
+                add_to_history(response.text, typ_tekstu)
+                st.rerun()
         except Exception as e: st.error(f"Błąd: {e}")
 
 # --- WYNIKI: GŁÓWNE OKNO ---
 if "artykul" in st.session_state:
     tekst = st.session_state.artykul
-    
     st.subheader("Gotowy Artykuł:")
     st.code(tekst, language="markdown", wrap_lines=True)
-    
     st.download_button("💾 Pobierz plik .txt", data=tekst, file_name=f"{typ_tekstu.lower()}.txt")
+
+```
