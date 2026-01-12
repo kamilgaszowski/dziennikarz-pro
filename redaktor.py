@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (FLEXBOX REORDERING) ---
+# --- CSS (STABLE FIX) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,59 +62,41 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER - ZMIANA KOLEJNOŚCI ELEMENTÓW */
+    /* 2. UPLOADER - METODA "INJECTION" (BEZPIECZNA) */
     [data-testid='stFileUploader'] {
         margin-top: 0px;
         margin-bottom: 15px;
     }
     
-    /* Główny kontener jako Flex Column */
+    /* Stylizacja kontenera */
     [data-testid='stFileUploader'] section {
-        display: flex;
-        flex-direction: column; /* Układ pionowy */
-        align-items: center;
-        padding: 15px !important;
+        padding: 20px !important;
         background-color: #16181e; 
         border: 1px dashed #333; 
         border-radius: 4px;
-        min-height: 0px !important;
+        text-align: center; /* Wyśrodkowanie wszystkiego */
     }
     [data-testid='stFileUploader'] section:hover {
         border-color: #666;
         background-color: #1c1f26;
     }
 
-    /* ELEMENT 1: Tytuł (poprzez ::before) */
+    /* WSTRZYKIWANIE TEKSTU NAD PRZYCISKIEM (::before) */
+    /* Używamy \a aby zrobić nową linię w CSS (odpowiednik \n) */
     [data-testid='stFileUploader'] section::before {
-        content: "📥 Importuj materiały";
-        order: 1; /* Pierwsze miejsce */
-        display: block; 
-        text-align: center; 
-        font-weight: 500; 
-        font-size: 14px; 
-        color: #bbb;
-        margin-bottom: 2px;
-    }
-    
-    /* ELEMENT 2: Opis techniczny (poprzez ::after) */
-    [data-testid='stFileUploader'] section::after {
-        content: "Limit 200MB • TXT, PDF, DOCX, MP3, WAV, M4A";
-        order: 2; /* Drugie miejsce */
-        display: block; 
-        text-align: center; 
-        font-size: 11px; 
-        color: #555;
-        margin-bottom: 10px; /* Odstęp od przycisku */
+        content: "Importuj materiały\\aLimit 200MB • TXT, PDF, DOCX, MP3, WAV, M4A";
+        white-space: pre-wrap; /* Pozwala na działanie znaku nowej linii */
+        display: block;
+        font-weight: 500;
+        font-size: 14px;
+        color: #ccc;
+        margin-bottom: 15px; /* Odstęp od przycisku */
+        line-height: 1.6;
     }
 
-    /* ELEMENT 3: Przycisk 'Browse files' (Zawartość wewnętrzna) */
-    [data-testid='stFileUploader'] section > * {
-        order: 3; /* Trzecie miejsce (na samym dole) */
-    }
-
-    /* Ukrycie oryginalnych tekstów Streamlita, zostawiamy tylko przycisk */
-    [data-testid='stFileUploader'] section span { display: none; }
-    [data-testid='stFileUploader'] section small { display: none; }
+    /* Ukrycie oryginalnych tekstów Streamlita */
+    [data-testid='stFileUploader'] section > div:first-child span { display: none; }
+    [data-testid='stFileUploader'] section > div:first-child small { display: none; }
     [data-testid='stFileUploader'] svg { display: none; }
     
     /* Zmniejszenie odstępu po wgraniu pliku */
@@ -125,7 +107,7 @@ st.markdown("""
     div.stButton > button {
         background-color: #2b2d35; color: #ffffff; border: 1px solid #41444e;
         border-radius: 4px; font-size: 14px; padding: 0.5rem 1rem; width: 100%;
-        margin-top: 10px;
+        margin-top: 5px;
     }
     div.stButton > button:hover { background-color: #ffffff; color: #000000; border-color: #ffffff; }
 
@@ -253,7 +235,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.12</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.13</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
@@ -316,9 +298,9 @@ with st.sidebar:
         else:
             st.caption("Pusto.")
 
-# --- GŁÓWNY INTERFEJS (TOP-DOWN FLOW) ---
+# --- GŁÓWNY INTERFEJS ---
 
-# 1. IMPORT (Reordered via Flexbox)
+# 1. IMPORT (CSS Fixed: Text above, Button below)
 uploaded = st.file_uploader(" ", type=['txt','pdf','docx','mp3','wav','m4a'], accept_multiple_files=True, label_visibility="collapsed")
 
 audio_to_proc = None
@@ -332,10 +314,10 @@ if uploaded:
     if docs_to_proc: info.append(f"Docs: {len(docs_to_proc)}")
     if info: st.caption(" • ".join(info))
 
-# 2. NOTATKA (Full width)
+# 2. NOTATKA
 pasted_text = st.text_area("notatki", height=120, placeholder="Wklej notatki, linki lub kontekst...", label_visibility="collapsed")
 
-# 3. GENERUJ (Full width button)
+# 3. GENERUJ
 start_gen = st.button("Generuj", use_container_width=True, type="primary")
 
 # --- LOGIKA GENEROWANIA ---
