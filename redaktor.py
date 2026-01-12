@@ -42,7 +42,7 @@ except ImportError:
 # --- UI CONFIG ---
 st.set_page_config(page_title="Redaktor", layout="wide")
 
-# --- CSS (MARGIN & HEIGHT FIX) ---
+# --- CSS (FINAL CONTAINER FIX) ---
 st.markdown("""
 <style>
     /* 1. TYPOGRAFIA */
@@ -62,11 +62,10 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* 2. UPLOADER - LEWOSTRONNY, WĄSKI I WYSOKI */
+    /* 2. UPLOADER - FIX WYSOKOŚCI I PADDINGU */
     [data-testid='stFileUploader'] {
         margin-top: 10px;
-        /* SZTYWNY MARGINES DOLNY - ODZIELA OD NOTATEK */
-        margin-bottom: 40px !important; 
+        margin-bottom: 30px !important; /* Odstęp od notatek */
         max-width: 500px; 
         margin-left: 0px !important;
         margin-right: auto;
@@ -74,9 +73,9 @@ st.markdown("""
     
     /* Stylizacja ramki */
     [data-testid='stFileUploader'] section {
-        padding: 20px !important;
-        /* DODATKOWY PADDING DOLNY, ŻEBY PRZYCISK SIĘ MIEŚCIŁ W RAMCE */
-        padding-bottom: 40px !important;
+        /* KLUCZOWE: DUŻY PADDING DOLNY, ŻEBY OBJĄĆ PRZYCISK */
+        padding: 20px 20px 60px 20px !important;
+        
         background-color: #16181e; 
         border: 1px dashed #333; 
         border-radius: 6px;
@@ -86,8 +85,9 @@ st.markdown("""
         display: flex;
         flex-direction: column;
         
-        /* MINIMALNA WYSOKOŚĆ DLA BEZPIECZEŃSTWA */
-        min-height: 120px !important;
+        /* WYMUSZENIE WYSOKOŚCI */
+        height: auto !important;
+        min-height: 140px !important; 
     }
     
     [data-testid='stFileUploader'] section:hover {
@@ -230,7 +230,7 @@ def clear_all_history():
 
 # --- UI: NAGŁÓWEK ---
 st.markdown("<h1>Redaktor</h1>", unsafe_allow_html=True)
-st.markdown("<p class='version-text'>v17.17</p>", unsafe_allow_html=True)
+st.markdown("<p class='version-text'>v17.18</p>", unsafe_allow_html=True)
 
 if not HAS_WEB_LIBS: st.warning("Brak bibliotek requests/bs4.")
 
