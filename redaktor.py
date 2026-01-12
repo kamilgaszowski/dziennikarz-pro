@@ -1,7 +1,7 @@
 import streamlit as st
 import io
 
-# Obsługa bibliotek do plików
+# Obsługa bibliotek do plików (PDF i DOCX)
 try:
     from docx import Document
     import PyPDF2
@@ -11,10 +11,11 @@ except ImportError:
 
 st.set_page_config(page_title="Dziennikarz Master PRO", page_icon="🖋️", layout="wide")
 
-st.title("🖋️ Dziennikarz Master PRO v10.6")
+st.title("🖋️ Dziennikarz Master PRO v10.7")
 
+# Powiadomienie o bibliotekach
 if not HAS_LIBS:
-    st.warning("⚠️ Brak bibliotek DOCX/PDF. Zainstaluj: pip install python-docx pypdf2")
+    st.warning("⚠️ Brak bibliotek do czytania DOCX/PDF. Zainstaluj je komendą: pip install python-docx pypdf2")
 
 # --- FUNKCJA CZYTANIA PLIKÓW ---
 def read_file(uploaded_file):
@@ -28,7 +29,7 @@ def read_file(uploaded_file):
             pdf_reader = PyPDF2.PdfReader(uploaded_file)
             return "\n".join([page.extract_text() for page in pdf_reader.pages])
     except Exception as e:
-        st.error(f"Błąd pliku {uploaded_file.name}: {e}")
+        st.error(f"Błąd czytania pliku {uploaded_file.name}: {e}")
     return ""
 
 # --- PANEL BOCZNY (USTAWIENIA) ---
@@ -41,65 +42,70 @@ with st.sidebar:
         index=0
     )
     
-    # Rozszerzony limit do 15 000 znaków
     target_chars = st.slider("Docelowa liczba znaków:", 500, 15000, value=3500, step=500)
-    st.info(f"Tryb: {typ_tekstu} | Cel: {target_chars} znaków")
+    st.info(f"Tryb: **{typ_tekstu}** | Cel: **{target_chars}** znaków")
 
-# --- WEJŚCIE DANYCH ---
-col1, col2 = st.columns(2)
-with col1:
-    uploaded_files = st.file_uploader("1. Dodaj pliki źródłowe:", accept_multiple_files=True)
-with col2:
-    pasted_text = st.text_area("2. Lub wklej materiały tutaj:", height=150)
+# --- WEJŚCIE DANYCH (PLIKI + TEKST) ---
+col_in1, col_in2 = st.columns(2)
+with col_in1:
+    uploaded_files = st.file_uploader("Dodaj pliki źródłowe:", accept_multiple_files=True)
+with col_in2:
+    pasted_text = st.text_area("Lub wklej materiały tutaj:", height=150)
 
-# Łączenie materiałów
-all_source = pasted_text
+# Łączenie materiałów źródłowych
+all_source_material = pasted_text
 if uploaded_files:
     for f in uploaded_files:
-        all_source += f"\n\n--- Materiał z: {f.name} ---\n" + read_file(f)
+        all_source_material += f"\n\n--- Materiał z pliku: {f.name} ---\n" + read_file(f)
 
-# --- DYNAMICZNE MANIFESTY (TWOJE PROMPTY) ---
+# --- ŁADOWANIE MANIFESTÓW (Z TWOICH PLIKÓW) ---
 
 if typ_tekstu == "Wywiad":
-    # Manifest na podstawie pliku wywiad.txt
-    current_manifest = f"""
-    TRYB wywiad. Jesteś redaktorem. Twoim zadaniem jest zredagować z materiału wywiad w formie Q/A. [cite: 1]
-    Nie dodajesz treści, tylko porządkujesz i wygładzasz język. [cite: 2]
-    
-    ZASADY:
-    - Pracuj wyłącznie na materiale źródłowym. [cite: 4]
-    - Zakaz metajęzyka i komentowania przebiegu rozmowy. [cite: 6, 7]
-    - Akapity oddzielaj wyłącznie pustą linią. [cite: 11]
-    - Przygotuj 5 zestawów nagłówków (nadtytuł, tytuł, lid). [cite: 12]
-    - Lidy w wywiadzie: zaczynają się od słowa 'O', forma: O [czymś], o [czymś] mówi [kto]. [cite: 18]
-    - Forma Q/A: P: ... O: ... (Minimum 6, maksimum 12 bloków). [cite: 19]
-    - Usuń zbędne 'ja' w 99% przypadków. [cite: 28]
-    - DŁUGOŚĆ: Celuj w {target_chars} znaków (±300). [cite: 37]
+    # Pełny manifest z wywiad.txt 
+    manifest = f"""
+    TRYB wywiad. Jesteś redaktorem. Twoim zadaniem jest zredagować z materiału wywiad w formie Q/A, 
+    ale z porządną redakcją językową wypowiedzi. Nie dodajesz treści, tylko porządkujesz i wygładzasz język.
+    Nie korzystaj z zapisanych wspomnień. Traktuj to jako zadanie jednorazowe.
+    Pracuj wyłącznie na materiale źródłowym. Nie dopisuj faktów.
+    ZAKAZY STYLU: Zakaz metajęzyka (w tej rozmowie, pada przykład itp.). Pytania naturalne.
+    Unikaj dwukropków i średników. Zakaz separatorów ---. Akapity oddzielaj pustą linią.
+    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid 1-2 zdania). Zakaz powtórzeń w zestawie.
+    LIDY W WYWIADZIE: Każdy musi zaczynać się od słowa O. Forma: O [czymś], o [czymś] mówi [kto].
+    KONSTRUKCJA: Forma Q/A (P: ... O: ...). Liczba bloków: 6-12.
+    REDAKCJA: Zachowaj styl rozmówcy. Usuń 'ja' w 99%. Napraw neologizmy (dodaj sekcję ZAMIANY na końcu jeśli były).
+    DŁUGOŚĆ: TARGET_CHARS = {target_chars} znaków (±300).
     """
 else:
-    # Manifest na podstawie pliku Instrukcja_artykul.txt (dla News i Reportaż)
-    current_manifest = f"""
-    TRYB article. Jesteś redaktorem prasowym. Stwórz artykuł informacyjny. [cite: 39]
-    
-    ZASADY:
-    - Pracuj wyłącznie na materiale źródłowym. [cite: 41]
-    - Rdzeń tekstu: Co najmniej dwie trzecie treści musi pochodzić ze źródła głównego. [cite: 48]
-    - Zakaz metajęzyka i klisz. [cite: 51, 57]
-    - Terminologia: Zakaz używania słowa 'kapłan'. Używaj: ksiądz, duchowny, duszpasterz. [cite: 58, 59]
-    - Cytaty: W ramce pauzowej (– Zdanie. –), minimum 4 zdania. [cite: 72]
-    - Nagłówki: 5 zestawów (nadtytuł, tytuł do 3 słów, lid). [cite: 78, 83]
-    - DŁUGOŚĆ: Celuj w {target_chars} znaków (±300). [cite: 85]
+    # Pełny manifest z Instrukcja_artykul.txt 
+    manifest = f"""
+    TRYB article. Jesteś redaktorem prasowym. Stwórz artykuł informacyjny.
+    Nie korzystaj z zapisanych wspomnień. Pracuj wyłącznie na materiale źródłowym.
+    RDZEŃ: Co najmniej 2/3 treści musi pochodzić ze źródła głównego.
+    ZAKAZY: Zakaz metajęzyka i komentowania wypowiedzi. Maksymalnie jedno 'mówi/dodaje' na akapit.
+    Zakaz słowa 'kapłan' (używaj: ksiądz, duchowny, duszpasterz, proboszcz).
+    CYTATY: W ramce pauzowej (– Zdanie. –), min. 4 zdania. 3 zdania kontekstu przed i po.
+    NAGŁÓWKI: 5 zestawów (nadtytuł, tytuł max 3 słowa, lid). Zakaz powtórzeń w zestawie.
+    STRUKTURA: Relacja z wydarzenia lub tekst problemowy. Pierwszy akapit: wprowadzenie (3 twarde fakty).
+    DŁUGOŚĆ: TARGET_CHARS = {target_chars} znaków (±300).
+    Akapity oddzielaj pustą linią. Zakaz list wypunktowanych.
     """
 
-# --- PRZYCISK GENEROWANIA ---
+# --- GENEROWANIE ---
 if st.button("🚀 Generuj Materiał"):
-    if all_source.strip():
-        with st.spinner(f"Generuję {typ_tekstu}..."):
-            # Tutaj Twoje wywołanie API (np. model.generate_content(current_manifest + all_source))
-            # Poniżej placeholder:
-            st.session_state.artykul = f"WYNIK DLA: {typ_tekstu}\n\n[Tu pojawi się treść wygenerowana zgodnie z manifestem...]"
+    if all_source_material.strip():
+        with st.spinner("Przetwarzam materiały zgodnie z instrukcjami..."):
+            
+            # --- UWAGA: Tutaj musisz wstawić swoje wywołanie API ---
+            # Przykład (jeśli używasz Gemini): 
+            # response = model.generate_content(manifest + "\\n\\nMATERIAŁ:\\n" + all_source_material)
+            # wygenerowany_tekst = response.text
+            
+            # Na razie zostawiam symulację, żeby kod się uruchomił:
+            wygenerowany_tekst = f"WYNIK DLA: {typ_tekstu}\\n\\n[Tu pojawi się treść wygenerowana przez Twoje API...]"
+            
+            st.session_state.artykul = wygenerowany_tekst
     else:
-        st.error("Wgraj pliki lub wklej materiały!")
+        st.error("Proszę najpierw wgraj pliki lub wklej materiały!")
 
 # --- WYNIKI I POPRAWIONY LICZNIK ---
 if "artykul" in st.session_state:
@@ -109,7 +115,7 @@ if "artykul" in st.session_state:
     
     st.divider()
     
-    # Delta color "inverse" sprawia, że ujemna różnica (niedomiar) jest zielona
+    # Delta_color="inverse" sprawia, że ujemna różnica (niedobór) jest ZIELONA
     st.metric(
         label="Liczba znaków", 
         value=dlugosc, 
@@ -118,12 +124,14 @@ if "artykul" in st.session_state:
     )
 
     st.subheader("Finalny tekst:")
-    # st.code NIE WYWALA BŁĘDÓW i ma wbudowany przycisk kopiowania
+    # st.code automatycznie dodaje przycisk "Copy" i nie wywala błędów
     st.code(tekst, language="markdown", wrap_lines=True)
     
+    st.caption("☝️ Przycisk kopiowania znajduje się w prawym górnym rogu ramki powyżej.")
+
     st.download_button(
         label="💾 Pobierz .txt",
         data=tekst,
-        file_name=f"{typ_tekstu.lower()}.txt",
+        file_name=f"{typ_tekstu.lower()}_gotowy.txt",
         mime="text/plain"
     )
