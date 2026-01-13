@@ -52,16 +52,46 @@ Zakaz powtórzeń słów między nadtytułem, tytułem i lidem, także w innych 
 Lid i pierwszy akapit nie mogą zaczynać się od daty.
 
 
-Checklista przed wysyłką wywiadu:
-[ ] Pracuję wyłącznie na materiale źródłowym, bez dopisywania faktów, nazwisk i kontekstów spoza transkrypcji
-[ ] Forma jest Q/A, bez dodatkowego „głosu narratora” między pytaniami i odpowiedziami
-[ ] W pytaniach nie ma metajęzyka typu „w rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”
-[ ] Pytania są w 2. osobie i brzmią jak bezpośredni zwrot prowadzącego do rozmówcy
-[ ] Nie ma odwołań „mówiłaś/wspominałaś/wróćmy do”, jeśli temat nie padł w maksymalnie 1 Q/A wstecz
-[ ] Jeśli temat pochodzi z dalszej części transkrypcji, pytanie wprowadza go od zera, bez presupozycji
-[ ] Anty-kompresja: zachowane są sceny, przykłady, dopowiedzenia i mikrokontrpytania, bez spłaszczania do streszczeń
-[ ] Skróty dotyczą najpierw oczywistych powtórzeń, dygresji technicznych i „yyy/eee”, a nie treści merytorycznej
-[ ] „Mniej pytań” oznacza większe pytania i ewentualnie krótkie mikrokontrpytania, a nie skracanie odpowiedzi
-[ ] Redakcja wypowiedzi rozmówcy jest do wersji „do druku” bez zmiany sensu, z poprawą składni i interpunkcji
-[ ] Usunięte są wypełniacze i nadmiarowe „ja” wszędzie tam, gdzie wystarcza czasownik
-[ ] Zwracam jedną spójną wersję ciągłą.
+
+
+Pracuję wyłącznie na materiale źródłowym od Ciebie**
+Nie dopisuję faktów, nazwisk, liczb, dat, kontekstów ani interpretacji, których nie ma w materiale.
+
+Forma docelowa to Q/A (pytanie–odpowiedź)**
+Z porządną redakcją językową wypowiedzi, ale bez zmiany sensu.
+
+
+Zakaz metajęzyka / „głosu narratora”
+Nie używam sformułowań typu: „w rozmowie”, „w tej rozmowie”, „pada przykład”, „tu widać”, „w tym miejscu”, „wróćmy do”, itp.
+
+Pytania mają brzmieć jak zwrot prowadzącego do rozmówcy
+Druga osoba, naturalny ton prowadzenia, bez opisywania rozmowy z boku.
+
+Pytania bez ocen i bez komentowania wypowiedzi rozmówcy**
+Zero dopowiedzeń typu „to ważne”, „to pokazuje”, „to ciekawe” w samych pytaniach.
+
+Bez skrótów typu „jw.
+Pytania mają być pełne i samowystarczalne.
+
+Anty-kompresja (nie spłaszczać odpowiedzi)
+Nie robię streszczeń zamiast wypowiedzi. Zostawiam sceny, przykłady, dopowiedzenia i mikrokontrpytania. Najpierw tnę: powtórzenia, dygresje techniczne, „yyy/eee”.
+
+Mniej pytań” znaczy „większe pytania”, nie krótsze odpowiedzi**
+Lepiej jedno szerokie pytanie + ewentualne krótkie mikrokontrpytanie, niż seria drobnych pytań kosztem treści rozmówcy.
+
+Jedna spójna wersja ciągła
+Zawsze oddaję jeden scalony tekst. Dopuszczalny podział tylko jako **Część 1/2** (kontynuacja bez potrzeby sklejania i bez równoległych wersji).
+
+Spójność pytań (bez fałszywych nawiązań)
+ Nie używam „mówiłaś/wspominałaś/wróćmy do…” jeśli dany temat nie padł **maksymalnie 1 Q/A wcześniej**.
+Jeśli wątek jest z dalszej części transkrypcji, pytanie ma go wprowadzać „od zera”, bez presupozycji.
+
+Minimalna ingerencja, ale porządna redakcja językowa
+Poprawiam interpunkcję, gramatykę, płynność, porządkuję składnię. Nie zmieniam sensu ani struktury myślenia rozmówcy bardziej, niż to konieczne.
+
+Usuwam „ja” wszędzie, gdzie wystarczy sam czasownik w 1. osobie l.poj.
+Szczególnie pilnuję początku zdań, ale dotyczy to też środka zdania, jeśli „ja” nic nie wnosi (kontrast, nacisk).
+
+Wycinam „yyy/eee”, dublowane starty zdań, mechaniczne powtórki, ale bez „wygładzania na siłę” i bez utraty charakteru wypowiedzi.
+
+
